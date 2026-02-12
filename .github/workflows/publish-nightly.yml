@@ -1,0 +1,66 @@
+name: Publish Nightly
+
+on:
+  push:
+    branches: [nightly]
+
+jobs:
+  typecheck:
+    name: Type Check
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+      - uses: useblacksmith/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run check-types
+
+  lint:
+    name: Lint
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+      - uses: useblacksmith/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  build:
+    name: Build
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+      - uses: useblacksmith/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  publish-nightly:
+    name: Publish Nightly to npm
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: [typecheck, lint, build]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: useblacksmith/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+      - run: npm ci
+      - run: npm run build
+      - name: Set nightly version
+        run: |
+          DATE=$(date +%Y%m%d)
+          VERSION=$(node -p "require('./package.json').version")
+          npm version "${VERSION}-nightly.${DATE}" --no-git-tag-version
+      - run: npm publish --tag nightly
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

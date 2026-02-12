@@ -1,10 +1,12 @@
 {
   "name": "@a2aletheia/a2a",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Aletheia trust-layer wrapper for the A2A (Agent-to-Agent) protocol",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "homepage": "https://github.com/A2Aletheia/a2a",
+  "bugs": "https://github.com/A2Aletheia/a2a/issues",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -37,8 +39,11 @@
     "@a2aletheia/sdk": "latest"
   },
   "devDependencies": {
-    "rimraf": "^6.0.1",
+    "@eslint/js": "^9.39.2",
     "@types/node": "^20",
-    "typescript": "^5.9.2"
+    "eslint": "^9.39.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.55.0"
   }
 }
