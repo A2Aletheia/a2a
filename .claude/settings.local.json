@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.blacksmith.sh)",
+      "WebFetch(domain:blacksmith.sh)"
+    ]
+  }
+}

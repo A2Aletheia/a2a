@@ -1,6 +1,5 @@
 import type { Agent, AletheiaLogger, AletheiaLogLevel } from "@a2aletheia/sdk";
 import type {
-  AgentCard,
   Message,
   Task,
   TaskStatusUpdateEvent,
