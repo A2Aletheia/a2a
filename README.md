@@ -153,3 +153,7 @@ import type {
 **Included:** Discovery, DID verification, liveness checks, trust score gating, send/stream messaging, connection handles, agent selection strategies.
 
 **Not included:** Server-side agent hosting, retry/circuit-breaker, connection pooling, response caching, multi-agent fan-out, payment integration, response signature verification, push notifications.
+
+## License
+
+Licensed under [AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.html)
