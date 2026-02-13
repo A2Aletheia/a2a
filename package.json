@@ -1,6 +1,6 @@
 {
   "name": "@a2aletheia/a2a",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Aletheia trust-layer wrapper for the A2A (Agent-to-Agent) protocol",
   "type": "module",
   "main": "./dist/index.js",
@@ -33,7 +33,7 @@
     "agent-to-agent"
   ],
   "author": "",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "dependencies": {
     "@a2a-js/sdk": "^0.2.5",
     "@a2aletheia/sdk": "latest"

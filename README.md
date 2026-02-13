@@ -156,4 +156,4 @@ import type {
 
 ## License
 
-Licensed under [AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.html)
+Licensed under [MIT License](LICENSE)
