@@ -1,5 +1,10 @@
 # @a2aletheia/a2a
 
+[![npm version](https://img.shields.io/npm/v/@a2aletheia/a2a.svg)](https://www.npmjs.com/package/@a2aletheia/a2a)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://a2aletheia.github.io/a2a)
+
 > **This is a 90% vibe-coded proof of concept. Open PR for smells.**
 
 Server-side package that wraps [`@a2a-js/sdk`](https://www.npmjs.com/package/@a2a-js/sdk) with Aletheia's trust and identity layer. Requestors import this instead of `@a2a-js/sdk` directly.
@@ -153,6 +158,29 @@ import type {
 **Included:** Discovery, DID verification, liveness checks, trust score gating, send/stream messaging, connection handles, agent selection strategies.
 
 **Not included:** Server-side agent hosting, retry/circuit-breaker, connection pooling, response caching, multi-agent fan-out, payment integration, response signature verification, push notifications.
+
+## Documentation
+
+📚 **[Full Documentation](https://a2aletheia.github.io/a2a)**
+
+### Guides
+
+- [Getting Started](https://a2aletheia.github.io/a2a/guides/getting-started) - Installation, setup, and first request
+- [Trust Pipeline](https://a2aletheia.github.io/a2a/guides/trust-pipeline) - Understanding DID verification, liveness checks, and trust scores
+- [Agent Selection Strategies](https://a2aletheia.github.io/a2a/guides/agent-selection) - Built-in and custom selectors
+- [Context Persistence](https://a2aletheia.github.io/a2a/guides/context-persistence) - Redis-backed conversation state for serverless
+- [Error Handling](https://a2aletheia.github.io/a2a/guides/error-handling) - Error types and recovery patterns
+- [Building Peer Agents](https://a2aletheia.github.io/a2a/guides/building-peer-agents) - Full-duplex agents with PeerAgent
+
+### API Reference
+
+- [AletheiaA2A](https://a2aletheia.github.io/a2a/api/aletheia-a2a) - Main client class
+- [TrustedAgent](https://a2aletheia.github.io/a2a/api/trusted-agent) - Connection handle
+- [PeerAgent](https://a2aletheia.github.io/a2a/api/peer-agent) - Full-duplex agent
+- [Agent Selectors](https://a2aletheia.github.io/a2a/api/agent-selectors) - Selection strategies
+- [Context Store](https://a2aletheia.github.io/a2a/api/context-store) - Persistence interface
+- [Errors](https://a2aletheia.github.io/a2a/api/errors) - Error classes
+- [Types](https://a2aletheia.github.io/a2a/api/types) - All TypeScript interfaces
 
 ## License
 
