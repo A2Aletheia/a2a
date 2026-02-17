@@ -6,6 +6,14 @@ description: Aletheia trust-layer wrapper for the A2A (Agent-to-Agent) protocol
 baseurl: "/a2a"
 url: "https://a2aletheia.github.io"
 
+plugins:
+  - jekyll-remote-theme
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
 color_scheme: dark
 search_enabled: true
 search:
@@ -25,11 +33,25 @@ aux_links_new_tab: true
 
 nav_sort: case_insensitive
 
-nav_categories:
+collections:
   guides:
-    title: Guides
+    permalink: /:collection/:path/
+    output: true
   api:
-    title: API Reference
+    permalink: /:collection/:path/
+    output: true
+
+defaults:
+  - scope:
+      path: ""
+      type: "guides"
+    values:
+      layout: "default"
+  - scope:
+      path: ""
+      type: "api"
+    values:
+      layout: "default"
 
 nav_exclude:
   - index.md
