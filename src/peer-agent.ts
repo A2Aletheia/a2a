@@ -22,11 +22,23 @@ import {
 import { AletheiaA2A } from "./aletheia-a2a.js";
 import type {
   AgentSelector,
+  AgentSigningIdentity,
   MessageInput,
   SendOptions,
   TrustedResponse,
   TrustedStreamEvent,
 } from "./types.js";
+import {
+  extractSenderEnvelope,
+  verifySenderEnvelope,
+  setVerifiedSender,
+  computePartsDigest,
+} from "./sender-identity.js";
+import {
+  extractUserDelegation,
+  verifyUserDelegation,
+  setVerifiedUser,
+} from "./user-delegation.js";
 import type { TrustedAgent } from "./trusted-agent.js";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +71,26 @@ export interface PeerAgentConfig {
   livenessCheckBeforeSend?: boolean;
   verifyIdentity?: boolean;
   authToken?: string;
+
+  // --- Sender identity (Layer 1) ---
+
+  /** Sign outbound messages with the agent's Ed25519 key. Requires `signingIdentity`. */
+  signOutboundMessages?: boolean;
+  /** Agent's signing identity (DID + private key). */
+  signingIdentity?: AgentSigningIdentity;
+  /** Verify sender identity on inbound messages. */
+  verifySenderIdentity?: boolean;
+  /** Reject unsigned inbound messages. Only effective when `verifySenderIdentity` is true. */
+  requireSignedMessages?: boolean;
+  /** Maximum age (ms) for accepting signed messages. Default: 300_000 (5 minutes). */
+  maxMessageAge?: number;
+
+  // --- User delegation (Layer 2) ---
+
+  /** Verify user delegation proofs on inbound messages. */
+  verifyUserDelegation?: boolean;
+  /** Reject messages without valid user delegation. */
+  requireUserDelegation?: boolean;
 
   // Observability (BYOL)
   logger?: AletheiaLogger;
@@ -101,8 +133,10 @@ export interface PeerAgentConfig {
 export class PeerAgent {
   private readonly agent: AletheiaAgent;
   private readonly client: AletheiaA2A;
+  private readonly config: PeerAgentConfig;
 
   constructor(config: PeerAgentConfig) {
+    this.config = config;
     const agentConfig: AletheiaAgentConfig = {
       name: config.name,
       version: config.version,
@@ -132,6 +166,8 @@ export class PeerAgent {
       livenessCheckBeforeSend: config.livenessCheckBeforeSend,
       verifyIdentity: config.verifyIdentity,
       authToken: config.authToken,
+      signOutboundMessages: config.signOutboundMessages,
+      signingIdentity: config.signingIdentity,
       logger: config.logger,
       logLevel: config.logLevel,
     });
@@ -143,9 +179,65 @@ export class PeerAgent {
 
   /**
    * Register the message handler for incoming requests.
+   *
+   * When `verifySenderIdentity` or `verifyUserDelegation` is enabled,
+   * the handler is wrapped with a verification layer. Use
+   * `getVerifiedSender(context)` and `getVerifiedUser(context)` inside
+   * the handler to access verification results.
    */
   handle(handler: AgentHandler): this {
-    this.agent.handle(handler);
+    const needsVerification =
+      this.config.verifySenderIdentity || this.config.verifyUserDelegation;
+
+    if (!needsVerification) {
+      this.agent.handle(handler);
+      return this;
+    }
+
+    const config = this.config;
+
+    const wrappedHandler: AgentHandler = async (context, response) => {
+      const metadata = (
+        context.userMessage as { metadata?: Record<string, unknown> }
+      ).metadata;
+
+      // --- Layer 1: Agent sender verification ---
+      let senderDid: string | undefined;
+
+      if (config.verifySenderIdentity) {
+        const envelope = extractSenderEnvelope(metadata);
+        if (envelope) {
+          const digest = await computePartsDigest(context.userMessage.parts);
+          const verified = await verifySenderEnvelope(envelope, digest, {
+            maxMessageAge: config.maxMessageAge,
+          });
+          setVerifiedSender(context, verified);
+          senderDid = verified.signatureValid ? verified.did : undefined;
+        } else if (config.requireSignedMessages) {
+          response.fail("Unsigned messages are not accepted by this agent");
+          return;
+        }
+      }
+
+      // --- Layer 2: User delegation verification ---
+      if (config.verifyUserDelegation) {
+        const delegationEnvelope = extractUserDelegation(metadata);
+        if (delegationEnvelope) {
+          const verified = await verifyUserDelegation(
+            delegationEnvelope,
+            senderDid,
+          );
+          setVerifiedUser(context, verified);
+        } else if (config.requireUserDelegation) {
+          response.fail("User delegation proof is required by this agent");
+          return;
+        }
+      }
+
+      await handler(context, response);
+    };
+
+    this.agent.handle(wrappedHandler);
     return this;
   }
 

@@ -9,6 +9,8 @@ import type {
   MessageInput,
   SendOptions,
   ContextStore,
+  AgentSigningIdentity,
+  UserDelegationEnvelope,
 } from "./types.js";
 import { buildTrustInfo, buildMessageSendParams } from "./types.js";
 import { A2AProtocolError } from "./errors.js";
@@ -36,6 +38,12 @@ export class TrustedAgent {
   /** Registry client for refreshing trust data. */
   private readonly _aletheiaClient: AletheiaClient | undefined;
 
+  /** Signing identity for Layer 1 outbound signing. */
+  private readonly _signingIdentity: AgentSigningIdentity | undefined;
+
+  /** User delegation envelope for Layer 2 user identity. */
+  private _userDelegation: UserDelegationEnvelope | undefined;
+
   constructor(opts: {
     a2aClient: A2AClient;
     agentCard: AgentCard;
@@ -44,6 +52,7 @@ export class TrustedAgent {
     contextStore?: ContextStore;
     storeKey?: string;
     aletheiaClient?: AletheiaClient;
+    signingIdentity?: AgentSigningIdentity;
   }) {
     this._a2aClient = opts.a2aClient;
     this.agentCard = opts.agentCard;
@@ -53,6 +62,15 @@ export class TrustedAgent {
     this._contextStore = opts.contextStore;
     this._storeKey = opts.storeKey;
     this._aletheiaClient = opts.aletheiaClient;
+    this._signingIdentity = opts.signingIdentity;
+  }
+
+  /**
+   * Attach a user delegation envelope to all subsequent outbound messages.
+   * Call with `null` to clear.
+   */
+  setUserDelegation(delegation: UserDelegationEnvelope | null): void {
+    this._userDelegation = delegation ?? undefined;
   }
 
   /**
@@ -86,12 +104,14 @@ export class TrustedAgent {
     input: string | MessageInput,
     options?: SendOptions,
   ): Promise<TrustedResponse> {
-    const params = buildMessageSendParams(input, {
+    const params = await buildMessageSendParams(input, {
       ...options,
       // Carry forward conversation context unless caller explicitly overrides
       contextId: options?.contextId ?? this._contextId,
       taskId: options?.taskId ?? this._lastTaskId,
       blocking: options?.blocking ?? true,
+      signingIdentity: this._signingIdentity,
+      userDelegation: this._userDelegation,
     });
 
     const start = Date.now();
@@ -136,11 +156,13 @@ export class TrustedAgent {
     input: string | MessageInput,
     options?: SendOptions,
   ): AsyncGenerator<TrustedStreamEvent> {
-    const params = buildMessageSendParams(input, {
+    const params = await buildMessageSendParams(input, {
       ...options,
       contextId: options?.contextId ?? this._contextId,
       taskId: options?.taskId ?? this._lastTaskId,
       blocking: options?.blocking ?? false,
+      signingIdentity: this._signingIdentity,
+      userDelegation: this._userDelegation,
     });
 
     const eventStream = this._a2aClient.sendMessageStream(params);

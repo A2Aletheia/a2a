@@ -21,6 +21,7 @@
     "build": "tsc",
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
+    "test": "vitest",
     "clean": "rimraf dist"
   },
   "keywords": [
@@ -36,13 +37,15 @@
   "license": "MIT",
   "dependencies": {
     "@a2a-js/sdk": "^0.2.5",
-    "@a2aletheia/sdk": "latest"
+    "@a2aletheia/sdk": "latest",
+    "viem": "^2.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/node": "^20",
     "eslint": "^9.39.2",
     "rimraf": "^6.0.1",
+    "vitest": "^2.1.0",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.55.0"
   }

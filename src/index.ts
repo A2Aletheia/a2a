@@ -33,10 +33,35 @@ export {
   A2AProtocolError,
 } from "./errors.js";
 
+// Sender identity (Layer 1 — Agent-to-Agent)
+export {
+  getVerifiedSender,
+  computePartsDigest,
+  createSenderEnvelope,
+  extractSenderEnvelope,
+  verifySenderEnvelope,
+} from "./sender-identity.js";
+
+// User delegation (Layer 2 — User-to-Agent)
+export {
+  getVerifiedUser,
+  signUserDelegation,
+  verifyUserDelegation,
+  extractUserDelegation,
+  DELEGATION_DOMAIN,
+  DELEGATION_TYPES,
+} from "./user-delegation.js";
+
 // Package types
+export {
+  SENDER_IDENTITY_EXTENSION,
+  USER_DELEGATION_EXTENSION,
+} from "./types.js";
+
 export type {
   AletheiaA2AConfig,
   AgentSelector,
+  AgentSigningIdentity,
   MessageInput,
   SendOptions,
   TrustInfo,
@@ -46,6 +71,11 @@ export type {
   ContextStore,
   StoredContext,
   RedisLike,
+  SenderIdentityEnvelope,
+  VerifiedSender,
+  UserDelegation,
+  UserDelegationEnvelope,
+  VerifiedUser,
 } from "./types.js";
 
 // Re-exported A2A protocol types (consumers never need @a2a-js/sdk)

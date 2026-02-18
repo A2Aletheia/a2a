@@ -37,6 +37,12 @@ export class AletheiaA2A {
   constructor(private readonly config: AletheiaA2AConfig = {}) {
     this.logger = config.logger ?? new ConsoleLogger(config.logLevel ?? "info");
 
+    if (config.signOutboundMessages && !config.signingIdentity) {
+      throw new Error(
+        "signOutboundMessages requires signingIdentity to be provided",
+      );
+    }
+
     this.aletheiaClient = new AletheiaClient({
       apiUrl: resolveApiUrl(config.registryUrl),
     });
@@ -130,6 +136,9 @@ export class AletheiaA2A {
       trustInfo,
       contextStore: this.config.contextStore,
       storeKey,
+      signingIdentity: this.config.signOutboundMessages
+        ? this.config.signingIdentity
+        : undefined,
     });
 
     if (this.config.contextStore) {
@@ -245,6 +254,9 @@ export class AletheiaA2A {
       contextStore: storeKey ? this.config.contextStore : undefined,
       storeKey,
       aletheiaClient: this.aletheiaClient,
+      signingIdentity: this.config.signOutboundMessages
+        ? this.config.signingIdentity
+        : undefined,
     });
 
     if (this.config.contextStore && storeKey) {
