@@ -19,6 +19,5 @@
     "composite": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"],
-  "references": [{ "path": "../sdk" }]
+  "exclude": ["node_modules", "dist"]
 }
