@@ -476,7 +476,7 @@ app.all("/", async (c) => {
 });
 
 // Serve agent card
-app.get("/.well-known/agent.json", (c) => {
+app.get("/.well-known/agent-card.json", (c) => {
   return c.json(peer.getAgentCard());
 });
 
@@ -514,7 +514,7 @@ fastify.post("/", async (request, reply) => {
   return result;
 });
 
-fastify.get("/.well-known/agent.json", async () => {
+fastify.get("/.well-known/agent-card.json", async () => {
   return peer.getAgentCard();
 });
 

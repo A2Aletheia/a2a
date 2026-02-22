@@ -14,6 +14,15 @@ import type {
 } from "./types.js";
 import { buildTrustInfo, buildMessageSendParams } from "./types.js";
 import { A2AProtocolError } from "./errors.js";
+import { extractFlowRequest } from "./flow-types.js";
+
+function isErrorResponse(response: unknown): response is JSONRPCErrorResponse {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "error" in response
+  );
+}
 
 export class TrustedAgent {
   readonly did: string | null;
@@ -118,8 +127,8 @@ export class TrustedAgent {
     const response = await this._a2aClient.sendMessage(params);
     const duration = Date.now() - start;
 
-    if (this._a2aClient.isErrorResponse(response)) {
-      const err = (response as JSONRPCErrorResponse).error;
+    if (isErrorResponse(response)) {
+      const err = response.error;
       throw new A2AProtocolError(err.message ?? "A2A protocol error", {
         rpcCode: err.code,
       });
@@ -143,12 +152,17 @@ export class TrustedAgent {
 
     this._persistContext();
 
+    // Extract flow request from response metadata if present
+    const metadata = (result as { metadata?: Record<string, unknown> }).metadata;
+    const flowRequest = extractFlowRequest(metadata) ?? undefined;
+
     return {
       response: result,
       trustInfo: this.trustInfo,
       agentDid: this.did,
       agentName: this.agent?.name ?? this.agentCard.name,
       duration,
+      flowRequest,
     };
   }
 
@@ -203,8 +217,8 @@ export class TrustedAgent {
   async getTask(taskId: string): Promise<TrustedTaskResponse> {
     const response = await this._a2aClient.getTask({ id: taskId });
 
-    if (this._a2aClient.isErrorResponse(response)) {
-      const err = (response as JSONRPCErrorResponse).error;
+    if (isErrorResponse(response)) {
+      const err = response.error;
       throw new A2AProtocolError(err.message ?? "Failed to get task", {
         rpcCode: err.code,
       });
@@ -221,8 +235,8 @@ export class TrustedAgent {
   async cancelTask(taskId: string): Promise<TrustedTaskResponse> {
     const response = await this._a2aClient.cancelTask({ id: taskId });
 
-    if (this._a2aClient.isErrorResponse(response)) {
-      const err = (response as JSONRPCErrorResponse).error;
+    if (isErrorResponse(response)) {
+      const err = response.error;
       throw new A2AProtocolError(err.message ?? "Failed to cancel task", {
         rpcCode: err.code,
       });

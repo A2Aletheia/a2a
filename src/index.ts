@@ -66,6 +66,31 @@ export {
   USER_DELEGATION_EXTENSION,
 } from "./types.js";
 
+// Flow types (orchestrator-agent communication)
+export {
+  ORCHESTRATOR_PROTOCOL_URN,
+  FLOW_REQUEST_EXTENSION,
+  requestDelegation,
+  requestPayment,
+  requestConfirmation,
+  isFlowRequest,
+  extractFlowRequest,
+  isDelegationFlow,
+  isPaymentFlow,
+  isConfirmationFlow,
+} from "./flow-types.js";
+export type {
+  FlowType,
+  FlowRequest,
+  SkillAuthorization,
+} from "./flow-types.js";
+
+// Orchestrator protocol (for AgentCard extensions)
+export type {
+  OrchestratorProtocol,
+  OrchestratorExtension,
+} from "./orchestrator-protocol.js";
+
 export type {
   AletheiaA2AConfig,
   AgentSelector,

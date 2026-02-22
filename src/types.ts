@@ -1,4 +1,5 @@
 import type { Agent, AletheiaLogger, AletheiaLogLevel } from "@a2aletheia/sdk";
+import type { FlowRequest } from "@a2aletheia/sdk/agent";
 import type {
   Message,
   Task,
@@ -215,6 +216,8 @@ export interface TrustedResponse {
   agentDid: string | null;
   agentName: string;
   duration: number;
+  /** Flow request if agent yielded control to orchestrator */
+  flowRequest?: FlowRequest;
 }
 
 export interface TrustedStreamEvent {

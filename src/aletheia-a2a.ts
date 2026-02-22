@@ -1,6 +1,7 @@
 import type { Agent, AletheiaLogger } from "@a2aletheia/sdk";
 import { AletheiaClient, ConsoleLogger, resolveApiUrl } from "@a2aletheia/sdk";
 import { A2AClient } from "@a2a-js/sdk/client";
+import { AGENT_CARD_PATH } from "@a2a-js/sdk";
 import type {
   AletheiaA2AConfig,
   AgentSelector,
@@ -106,8 +107,6 @@ export class AletheiaA2A {
     url: string,
     options?: { scope?: string },
   ): Promise<TrustedAgent> {
-    // Scope isolates context per-caller (e.g. per chat session).
-    // Without scope, all callers share one conversation context — wrong for multi-user.
     const cacheKey = options?.scope ? `${url}#${options.scope}` : url;
 
     const cached = this._urlConnectionCache.get(cacheKey);
@@ -123,7 +122,9 @@ export class AletheiaA2A {
       url,
       scope: options?.scope,
     });
-    const a2aClient = new A2AClient(url);
+    
+    const agentCardUrl = this._toAgentCardUrl(url);
+    const a2aClient = await A2AClient.fromCardUrl(agentCardUrl);
     const agentCard = await a2aClient.getAgentCard();
     const trustInfo = buildTrustInfo(null);
 
@@ -136,7 +137,7 @@ export class AletheiaA2A {
       trustInfo,
       contextStore: this.config.contextStore,
       storeKey,
-      signingIdentity: this.config.signOutboundMessages
+      signingIdentity: this.config.signingIdentity
         ? this.config.signingIdentity
         : undefined,
     });
@@ -196,6 +197,11 @@ export class AletheiaA2A {
   // Internal
   // ---------------------------------------------------------------------------
 
+  private _toAgentCardUrl(baseUrl: string): string {
+    const path = `/${AGENT_CARD_PATH.replace(/^\//, "")}`;
+    return new URL(path, baseUrl.replace(/\/$/, "") + "/").toString();
+  }
+
   private async _discoverAndSelect(capability: string): Promise<Agent> {
     const agents = await this.discover({ capability });
 
@@ -237,7 +243,8 @@ export class AletheiaA2A {
       this.logger,
     );
 
-    const a2aClient = new A2AClient(agent.url);
+    const agentCardUrl = this._toAgentCardUrl(agent.url);
+    const a2aClient = await A2AClient.fromCardUrl(agentCardUrl);
     const agentCard = await a2aClient.getAgentCard();
 
     this.logger.info("Connected to agent", {
