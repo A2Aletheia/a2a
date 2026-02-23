@@ -39,6 +39,12 @@ export {
   AgentNotLiveError,
   TrustScoreBelowThresholdError,
   A2AProtocolError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
 } from "./errors.js";
 
 // Sender identity (Layer 1 — Agent-to-Agent)
@@ -109,6 +115,12 @@ export type {
   UserDelegation,
   UserDelegationEnvelope,
   VerifiedUser,
+  TransportProtocolName,
+  ClientFactoryOptions,
+  ClientConfig,
+  CallInterceptor,
+  AuthenticationHandler,
+  TransportFactory,
 } from "./types.js";
 
 // Re-exported A2A protocol types (consumers never need @a2a-js/sdk)
@@ -127,6 +139,15 @@ export type {
   TaskArtifactUpdateEvent,
   MessageSendParams,
   MessageSendConfiguration,
+  TaskPushNotificationConfig,
   A2AClient,
   A2AStreamEventData,
 } from "./types.js";
+
+// Transport factories for custom client setup
+export {
+  ClientFactory,
+  JsonRpcTransportFactory,
+  RestTransportFactory,
+  createAuthenticatingFetchWithRetry,
+} from "@a2a-js/sdk/client";

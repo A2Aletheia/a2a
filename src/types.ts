@@ -6,7 +6,16 @@ import type {
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   Part,
+  TaskPushNotificationConfig,
 } from "@a2a-js/sdk";
+import type {
+  Client as A2AClient,
+  ClientFactoryOptions,
+  ClientConfig,
+  CallInterceptor,
+  AuthenticationHandler,
+  TransportFactory,
+} from "@a2a-js/sdk/client";
 
 // ---------------------------------------------------------------------------
 // Re-exports — consumers never need to import @a2a-js/sdk directly
@@ -27,9 +36,19 @@ export type {
   TaskArtifactUpdateEvent,
   MessageSendParams,
   MessageSendConfiguration,
+  TaskPushNotificationConfig,
 } from "@a2a-js/sdk";
 
-export type { A2AClient } from "@a2a-js/sdk/client";
+export type {
+  A2AClient,
+  ClientFactoryOptions,
+  ClientConfig,
+  CallInterceptor,
+  AuthenticationHandler,
+  TransportFactory,
+} from "@a2a-js/sdk/client";
+
+export type { Extensions, HTTP_EXTENSION_HEADER } from "@a2a-js/sdk";
 
 // A2AStreamEventData is not exported from @a2a-js/sdk/client, so we define it
 export type A2AStreamEventData =
@@ -160,6 +179,17 @@ export interface AletheiaA2AConfig {
   /** Optional store for persisting conversation context (contextId/taskId). */
   contextStore?: ContextStore;
 
+  // --- Transport & Client options (v0.3.10+) ---
+
+  /** Preferred transport protocols to use. Override agent card preferences. */
+  preferredTransports?: TransportProtocolName[];
+  /** HTTP authentication handler for 401/403 retry flows. */
+  authenticationHandler?: AuthenticationHandler;
+  /** Request interceptors for logging, metrics, custom headers. */
+  interceptors?: CallInterceptor[];
+  /** Polling configuration for non-streaming clients. */
+  polling?: ClientConfig["polling"];
+
   // --- Sender identity (Layer 1) ---
 
   /** Sign outbound messages with the agent's Ed25519 key. Requires `signingIdentity`. */
@@ -180,6 +210,8 @@ export interface AletheiaA2AConfig {
   /** Reject messages without valid user delegation. Only effective when `verifyUserDelegation` is true. */
   requireUserDelegation?: boolean;
 }
+
+export type TransportProtocolName = "JSONRPC" | "HTTP+JSON" | "GRPC";
 
 export interface AgentSelector {
   select(agents: Agent[]): Agent;

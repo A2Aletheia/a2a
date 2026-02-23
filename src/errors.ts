@@ -65,3 +65,12 @@ export class A2AProtocolError extends AletheiaA2AError {
     this.rpcCode = options?.rpcCode;
   }
 }
+
+export {
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
+} from "@a2a-js/sdk/client";

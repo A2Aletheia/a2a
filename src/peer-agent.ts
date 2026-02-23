@@ -27,7 +27,12 @@ import type {
   SendOptions,
   TrustedResponse,
   TrustedStreamEvent,
+  TransportProtocolName,
 } from "./types.js";
+import type {
+  CallInterceptor,
+  AuthenticationHandler,
+} from "@a2a-js/sdk/client";
 import {
   extractSenderEnvelope,
   verifySenderEnvelope,
@@ -71,6 +76,15 @@ export interface PeerAgentConfig {
   livenessCheckBeforeSend?: boolean;
   verifyIdentity?: boolean;
   authToken?: string;
+
+  // --- Transport options (v0.3.10+) ---
+
+  /** Preferred transport protocols to use. Override agent card preferences. */
+  preferredTransports?: TransportProtocolName[];
+  /** HTTP authentication handler for 401/403 retry flows. */
+  authenticationHandler?: AuthenticationHandler;
+  /** Request interceptors for logging, metrics, custom headers. */
+  interceptors?: CallInterceptor[];
 
   // --- Sender identity (Layer 1) ---
 
@@ -168,6 +182,9 @@ export class PeerAgent {
       authToken: config.authToken,
       signOutboundMessages: config.signOutboundMessages,
       signingIdentity: config.signingIdentity,
+      preferredTransports: config.preferredTransports,
+      authenticationHandler: config.authenticationHandler,
+      interceptors: config.interceptors,
       logger: config.logger,
       logLevel: config.logLevel,
     });
