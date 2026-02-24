@@ -1,6 +1,14 @@
 import type { Agent, AletheiaLogger } from "@a2aletheia/sdk";
 import { AletheiaClient, ConsoleLogger, resolveApiUrl } from "@a2aletheia/sdk";
-import { A2AClient } from "@a2a-js/sdk/client";
+import {
+  ClientFactory,
+  ClientFactoryOptions,
+  type Client,
+  JsonRpcTransportFactory,
+  RestTransportFactory,
+  createAuthenticatingFetchWithRetry,
+} from "@a2a-js/sdk/client";
+import { AGENT_CARD_PATH } from "@a2a-js/sdk";
 import type {
   AletheiaA2AConfig,
   AgentSelector,
@@ -19,11 +27,38 @@ import {
 import { TrustedAgent } from "./trusted-agent.js";
 import { AgentNotFoundError } from "./errors.js";
 
+async function createTransportFactories(
+  authHandler?: AletheiaA2AConfig["authenticationHandler"],
+): Promise<(JsonRpcTransportFactory | RestTransportFactory)[]> {
+  const factories: (JsonRpcTransportFactory | RestTransportFactory)[] = [];
+
+  if (authHandler) {
+    const authFetch = createAuthenticatingFetchWithRetry(fetch, authHandler);
+    factories.push(new JsonRpcTransportFactory({ fetchImpl: authFetch }));
+    factories.push(new RestTransportFactory({ fetchImpl: authFetch }));
+  } else {
+    factories.push(new JsonRpcTransportFactory());
+    factories.push(new RestTransportFactory());
+  }
+
+  return factories;
+}
+
+async function fetchAgentCard(url: string): Promise<import("@a2a-js/sdk").AgentCard> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch agent card: ${response.status}`);
+  }
+  return response.json();
+}
+
 export class AletheiaA2A {
   private readonly aletheiaClient: AletheiaClient;
   private readonly selector: AgentSelector;
   private readonly pipelineConfig: TrustPipelineConfig;
   readonly logger: AletheiaLogger;
+
+  private readonly _clientFactory: ClientFactory;
 
   /**
    * Cache of connected agents keyed by DID.
@@ -37,6 +72,12 @@ export class AletheiaA2A {
   constructor(private readonly config: AletheiaA2AConfig = {}) {
     this.logger = config.logger ?? new ConsoleLogger(config.logLevel ?? "info");
 
+    if (config.signOutboundMessages && !config.signingIdentity) {
+      throw new Error(
+        "signOutboundMessages requires signingIdentity to be provided",
+      );
+    }
+
     this.aletheiaClient = new AletheiaClient({
       apiUrl: resolveApiUrl(config.registryUrl),
     });
@@ -47,6 +88,36 @@ export class AletheiaA2A {
 
     this.selector = config.agentSelector ?? new HighestTrustSelector();
     this.pipelineConfig = buildPipelineConfig(config);
+
+    this._clientFactory = this._createClientFactory();
+  }
+
+  private _createClientFactory(): ClientFactory {
+    const options = ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+      clientConfig: {
+        interceptors: this.config.interceptors,
+        polling: this.config.polling,
+      },
+      preferredTransports: this.config.preferredTransports,
+    });
+
+    return new ClientFactory(options);
+  }
+
+  async _createClientFromUrl(url: string): Promise<Client> {
+    const agentCard = await fetchAgentCard(url);
+    const transports = await createTransportFactories(this.config.authenticationHandler);
+    const options = ClientFactoryOptions.createFrom(ClientFactoryOptions.default, {
+      transports,
+      clientConfig: {
+        interceptors: this.config.interceptors,
+        polling: this.config.polling,
+      },
+      preferredTransports: this.config.preferredTransports,
+    });
+
+    const factory = new ClientFactory(options);
+    return factory.createFromAgentCard(agentCard);
   }
 
   // ---------------------------------------------------------------------------
@@ -81,7 +152,6 @@ export class AletheiaA2A {
   // ---------------------------------------------------------------------------
 
   async connect(did: string): Promise<TrustedAgent> {
-    // For cached connections, fetch fresh agent data and update trust info
     const cached = this._connectionCache.get(did);
     if (cached) {
       this.logger.debug("Reusing cached connection, refreshing trust", { did });
@@ -100,8 +170,6 @@ export class AletheiaA2A {
     url: string,
     options?: { scope?: string },
   ): Promise<TrustedAgent> {
-    // Scope isolates context per-caller (e.g. per chat session).
-    // Without scope, all callers share one conversation context — wrong for multi-user.
     const cacheKey = options?.scope ? `${url}#${options.scope}` : url;
 
     const cached = this._urlConnectionCache.get(cacheKey);
@@ -117,7 +185,9 @@ export class AletheiaA2A {
       url,
       scope: options?.scope,
     });
-    const a2aClient = new A2AClient(url);
+    
+    const agentCardUrl = this._toAgentCardUrl(url);
+    const a2aClient = await this._createClientFromUrl(agentCardUrl);
     const agentCard = await a2aClient.getAgentCard();
     const trustInfo = buildTrustInfo(null);
 
@@ -130,6 +200,9 @@ export class AletheiaA2A {
       trustInfo,
       contextStore: this.config.contextStore,
       storeKey,
+      signingIdentity: this.config.signingIdentity
+        ? this.config.signingIdentity
+        : undefined,
     });
 
     if (this.config.contextStore) {
@@ -187,6 +260,11 @@ export class AletheiaA2A {
   // Internal
   // ---------------------------------------------------------------------------
 
+  private _toAgentCardUrl(baseUrl: string): string {
+    const path = `/${AGENT_CARD_PATH.replace(/^\//, "")}`;
+    return new URL(path, baseUrl.replace(/\/$/, "") + "/").toString();
+  }
+
   private async _discoverAndSelect(capability: string): Promise<Agent> {
     const agents = await this.discover({ capability });
 
@@ -200,21 +278,18 @@ export class AletheiaA2A {
   }
 
   private async _connectAgent(agent: Agent): Promise<TrustedAgent> {
-    // Return cached connection with refreshed trust data
     if (agent.did) {
       const cached = this._connectionCache.get(agent.did);
       if (cached) {
         this.logger.debug("Reusing cached connection, refreshing trust", {
           did: agent.did,
         });
-        // Re-verify preconditions with fresh agent data
         await verifySendPreconditions(
           agent,
           this.aletheiaClient,
           this.pipelineConfig,
           this.logger,
         );
-        // Update the cached agent's trust info
         cached.agent = agent;
         cached.trustInfo = buildTrustInfo(agent);
         return cached;
@@ -228,7 +303,8 @@ export class AletheiaA2A {
       this.logger,
     );
 
-    const a2aClient = new A2AClient(agent.url);
+    const agentCardUrl = this._toAgentCardUrl(agent.url);
+    const a2aClient = await this._createClientFromUrl(agentCardUrl);
     const agentCard = await a2aClient.getAgentCard();
 
     this.logger.info("Connected to agent", {
@@ -245,13 +321,15 @@ export class AletheiaA2A {
       contextStore: storeKey ? this.config.contextStore : undefined,
       storeKey,
       aletheiaClient: this.aletheiaClient,
+      signingIdentity: this.config.signOutboundMessages
+        ? this.config.signingIdentity
+        : undefined,
     });
 
     if (this.config.contextStore && storeKey) {
       await trustedAgent.restoreContext();
     }
 
-    // Cache the connection by DID
     if (agent.did) {
       this._connectionCache.set(agent.did, trustedAgent);
     }

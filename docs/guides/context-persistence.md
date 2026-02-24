@@ -38,6 +38,98 @@ interface StoredContext {
 
 These identifiers are returned by A2A-compliant agents and enable you to continue a conversation where it left off after a restart.
 
+## How Context Preservation Works
+
+Context preservation requires cooperation between the orchestrator (this package) and the agent being called.
+
+### Orchestrator Side (This Package)
+
+The `TrustedAgent` class tracks conversation state:
+
+1. **Captures identifiers from responses** - After each `send()` or `stream()`, stores `contextId` and `taskId`
+2. **Forwards on subsequent requests** - Automatically includes stored identifiers in follow-up messages
+3. **Persists via ContextStore** - External storage survives process restarts and cold-starts
+
+```typescript
+// First message - no context yet
+const agent = await client.connect("did:web:agent.example.com");
+const response1 = await agent.send("Hello");
+
+// Orchestrator now has: contextId, taskId from response1
+
+// Second message - orchestrator forwards context automatically
+const response2 = await agent.send("Tell me more");
+// Agent receives the same contextId, can continue conversation
+```
+
+### Agent Side (Required Cooperation)
+
+For context preservation to work, **agents must return `contextId` in their responses**.
+
+When using `@a2aletheia/sdk`, this happens automatically:
+
+```typescript
+import { AletheiaAgent } from "@a2aletheia/sdk/agent";
+
+agent.handle(async (context, response) => {
+  // context.contextId is the conversation identifier
+  // All response methods automatically include it:
+  response.text("Your request has been processed");
+  // Response includes: { contextId: "...", taskId: "...", parts: [...] }
+});
+```
+
+All `AgentResponse` methods (`text`, `data`, `working`, `done`, `fail`, etc.) automatically include `contextId` from the incoming request.
+
+### Agent-Side State Preservation
+
+Stateful agents (chat assistants, multi-step workflows) use `contextId` to store their own conversation history:
+
+```typescript
+// Agent's internal state management
+const conversations = new Map<string, Message[]>();
+
+agent.handle(async (context, response) => {
+  const sessionId = context.contextId ?? "default";
+  const history = conversations.get(sessionId) ?? [];
+  
+  // Process with history context...
+  const reply = await processWithHistory(history, context.textContent);
+  
+  // Update stored history
+  history.push({ role: "user", content: context.textContent });
+  history.push({ role: "assistant", content: reply });
+  conversations.set(sessionId, history);
+  
+  response.text(reply); // Automatically includes contextId
+});
+```
+
+### Declaring Stateful Capability
+
+Agents that support multi-turn conversations should declare this in their capabilities:
+
+```typescript
+const agent = new AletheiaAgent({
+  // ...
+  capabilities: {
+    streaming: true,
+    stateTransitionHistory: true,  // Signals conversation continuity support
+  },
+});
+```
+
+### What If Agents Don't Cooperate?
+
+If an agent doesn't return `contextId` in responses:
+
+1. Orchestrator receives `contextId: undefined`
+2. Next request has no identifier to forward
+3. Agent sees a fresh `contextId` each time
+4. **No conversation continuity** — each message starts from scratch
+
+This is why using `@a2aletheia/sdk` for agent development is recommended — it handles this automatically.
+
 ## The ContextStore Interface
 
 The `ContextStore` interface defines a simple key-value contract:

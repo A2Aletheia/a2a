@@ -23,6 +23,14 @@ export type { RedisContextStoreOptions } from "./context-store.js";
 export { RedisTaskStore } from "@a2aletheia/sdk/agent";
 export type { RedisTaskStoreOptions } from "@a2aletheia/sdk/agent";
 
+// SDK agent types (re-exported so consumers use the same SDK instance as @a2aletheia/a2a)
+export { AgentResponse } from "@a2aletheia/sdk/agent";
+export type {
+  AgentContext,
+  AgentHandler,
+  AgentSkill,
+} from "@a2aletheia/sdk/agent";
+
 // Errors
 export {
   AletheiaA2AError,
@@ -31,12 +39,68 @@ export {
   AgentNotLiveError,
   TrustScoreBelowThresholdError,
   A2AProtocolError,
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
 } from "./errors.js";
 
+// Sender identity (Layer 1 — Agent-to-Agent)
+export {
+  getVerifiedSender,
+  computePartsDigest,
+  createSenderEnvelope,
+  extractSenderEnvelope,
+  verifySenderEnvelope,
+} from "./sender-identity.js";
+
+// User delegation (Layer 2 — User-to-Agent)
+export {
+  getVerifiedUser,
+  signUserDelegation,
+  verifyUserDelegation,
+  extractUserDelegation,
+  DELEGATION_DOMAIN,
+  DELEGATION_TYPES,
+} from "./user-delegation.js";
+
 // Package types
+export {
+  SENDER_IDENTITY_EXTENSION,
+  USER_DELEGATION_EXTENSION,
+} from "./types.js";
+
+// Flow types (orchestrator-agent communication)
+export {
+  ORCHESTRATOR_PROTOCOL_URN,
+  FLOW_REQUEST_EXTENSION,
+  requestDelegation,
+  requestPayment,
+  requestConfirmation,
+  isFlowRequest,
+  extractFlowRequest,
+  isDelegationFlow,
+  isPaymentFlow,
+  isConfirmationFlow,
+} from "./flow-types.js";
+export type {
+  FlowType,
+  FlowRequest,
+  SkillAuthorization,
+} from "./flow-types.js";
+
+// Orchestrator protocol (for AgentCard extensions)
+export type {
+  OrchestratorProtocol,
+  OrchestratorExtension,
+} from "./orchestrator-protocol.js";
+
 export type {
   AletheiaA2AConfig,
   AgentSelector,
+  AgentSigningIdentity,
   MessageInput,
   SendOptions,
   TrustInfo,
@@ -46,6 +110,17 @@ export type {
   ContextStore,
   StoredContext,
   RedisLike,
+  SenderIdentityEnvelope,
+  VerifiedSender,
+  UserDelegation,
+  UserDelegationEnvelope,
+  VerifiedUser,
+  TransportProtocolName,
+  ClientFactoryOptions,
+  ClientConfig,
+  CallInterceptor,
+  AuthenticationHandler,
+  TransportFactory,
 } from "./types.js";
 
 // Re-exported A2A protocol types (consumers never need @a2a-js/sdk)
@@ -64,6 +139,15 @@ export type {
   TaskArtifactUpdateEvent,
   MessageSendParams,
   MessageSendConfiguration,
+  TaskPushNotificationConfig,
   A2AClient,
   A2AStreamEventData,
 } from "./types.js";
+
+// Transport factories for custom client setup
+export {
+  ClientFactory,
+  JsonRpcTransportFactory,
+  RestTransportFactory,
+  createAuthenticatingFetchWithRetry,
+} from "@a2a-js/sdk/client";

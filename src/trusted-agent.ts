@@ -1,6 +1,6 @@
 import type { Agent, AletheiaClient } from "@a2aletheia/sdk";
-import type { AgentCard, Task, JSONRPCErrorResponse } from "@a2a-js/sdk";
-import { A2AClient } from "@a2a-js/sdk/client";
+import type { AgentCard, Task, TaskPushNotificationConfig } from "@a2a-js/sdk";
+import type { Client } from "@a2a-js/sdk/client";
 import type {
   TrustInfo,
   TrustedResponse,
@@ -9,9 +9,12 @@ import type {
   MessageInput,
   SendOptions,
   ContextStore,
+  AgentSigningIdentity,
+  UserDelegationEnvelope,
 } from "./types.js";
 import { buildTrustInfo, buildMessageSendParams } from "./types.js";
 import { A2AProtocolError } from "./errors.js";
+import { extractFlowRequest } from "./flow-types.js";
 
 export class TrustedAgent {
   readonly did: string | null;
@@ -20,7 +23,7 @@ export class TrustedAgent {
   trustInfo: TrustInfo;
 
   /** @internal */
-  readonly _a2aClient: A2AClient;
+  readonly _a2aClient: Client;
 
   /**
    * Tracked conversation state — populated after the first send/stream.
@@ -36,14 +39,21 @@ export class TrustedAgent {
   /** Registry client for refreshing trust data. */
   private readonly _aletheiaClient: AletheiaClient | undefined;
 
+  /** Signing identity for Layer 1 outbound signing. */
+  private readonly _signingIdentity: AgentSigningIdentity | undefined;
+
+  /** User delegation envelope for Layer 2 user identity. */
+  private _userDelegation: UserDelegationEnvelope | undefined;
+
   constructor(opts: {
-    a2aClient: A2AClient;
+    a2aClient: Client;
     agentCard: AgentCard;
     agent: Agent | null;
     trustInfo: TrustInfo;
     contextStore?: ContextStore;
     storeKey?: string;
     aletheiaClient?: AletheiaClient;
+    signingIdentity?: AgentSigningIdentity;
   }) {
     this._a2aClient = opts.a2aClient;
     this.agentCard = opts.agentCard;
@@ -53,6 +63,15 @@ export class TrustedAgent {
     this._contextStore = opts.contextStore;
     this._storeKey = opts.storeKey;
     this._aletheiaClient = opts.aletheiaClient;
+    this._signingIdentity = opts.signingIdentity;
+  }
+
+  /**
+   * Attach a user delegation envelope to all subsequent outbound messages.
+   * Call with `null` to clear.
+   */
+  setUserDelegation(delegation: UserDelegationEnvelope | null): void {
+    this._userDelegation = delegation ?? undefined;
   }
 
   /**
@@ -72,6 +91,10 @@ export class TrustedAgent {
     return this.agentCard.capabilities?.streaming === true;
   }
 
+  get supportsPushNotifications(): boolean {
+    return this.agentCard.capabilities?.pushNotifications === true;
+  }
+
   /** The contextId from the most recent exchange, if any. */
   get contextId(): string | undefined {
     return this._contextId;
@@ -86,29 +109,30 @@ export class TrustedAgent {
     input: string | MessageInput,
     options?: SendOptions,
   ): Promise<TrustedResponse> {
-    const params = buildMessageSendParams(input, {
+    const params = await buildMessageSendParams(input, {
       ...options,
-      // Carry forward conversation context unless caller explicitly overrides
       contextId: options?.contextId ?? this._contextId,
       taskId: options?.taskId ?? this._lastTaskId,
       blocking: options?.blocking ?? true,
+      signingIdentity: this._signingIdentity,
+      userDelegation: this._userDelegation,
     });
 
     const start = Date.now();
-    const response = await this._a2aClient.sendMessage(params);
+    let result: Task | { kind: "message"; taskId?: string; contextId?: string; metadata?: Record<string, unknown> };
+    try {
+      result = await this._a2aClient.sendMessage(params);
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err) {
+        throw new A2AProtocolError(
+          (err as { message?: string }).message ?? "A2A protocol error",
+          { rpcCode: (err as { code: number }).code },
+        );
+      }
+      throw err;
+    }
     const duration = Date.now() - start;
 
-    if (this._a2aClient.isErrorResponse(response)) {
-      const err = (response as JSONRPCErrorResponse).error;
-      throw new A2AProtocolError(err.message ?? "A2A protocol error", {
-        rpcCode: err.code,
-      });
-    }
-
-    const result = (response as { result: Task }).result;
-
-    // Track conversation state for follow-up messages.
-    // A2A responses carry taskId + contextId on both "task" and "message" kinds.
     if (result.kind === "task") {
       this._lastTaskId = result.id;
       this._contextId = result.contextId;
@@ -123,12 +147,16 @@ export class TrustedAgent {
 
     this._persistContext();
 
+    const metadata = (result as { metadata?: Record<string, unknown> }).metadata;
+    const flowRequest = extractFlowRequest(metadata) ?? undefined;
+
     return {
-      response: result,
+      response: result as Task,
       trustInfo: this.trustInfo,
       agentDid: this.did,
       agentName: this.agent?.name ?? this.agentCard.name,
       duration,
+      flowRequest,
     };
   }
 
@@ -136,17 +164,18 @@ export class TrustedAgent {
     input: string | MessageInput,
     options?: SendOptions,
   ): AsyncGenerator<TrustedStreamEvent> {
-    const params = buildMessageSendParams(input, {
+    const params = await buildMessageSendParams(input, {
       ...options,
       contextId: options?.contextId ?? this._contextId,
       taskId: options?.taskId ?? this._lastTaskId,
       blocking: options?.blocking ?? false,
+      signingIdentity: this._signingIdentity,
+      userDelegation: this._userDelegation,
     });
 
     const eventStream = this._a2aClient.sendMessageStream(params);
 
     for await (const event of eventStream) {
-      // Track conversation state from streamed events
       if (event.kind === "task") {
         this._lastTaskId = event.id;
         this._contextId = event.contextId;
@@ -179,17 +208,21 @@ export class TrustedAgent {
   }
 
   async getTask(taskId: string): Promise<TrustedTaskResponse> {
-    const response = await this._a2aClient.getTask({ id: taskId });
-
-    if (this._a2aClient.isErrorResponse(response)) {
-      const err = (response as JSONRPCErrorResponse).error;
-      throw new A2AProtocolError(err.message ?? "Failed to get task", {
-        rpcCode: err.code,
-      });
+    let task: Task;
+    try {
+      task = await this._a2aClient.getTask({ id: taskId });
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err) {
+        throw new A2AProtocolError(
+          (err as { message?: string }).message ?? "Failed to get task",
+          { rpcCode: (err as { code: number }).code },
+        );
+      }
+      throw err;
     }
 
     return {
-      response: (response as { result: Task }).result,
+      response: task,
       trustInfo: this.trustInfo,
       agentDid: this.did,
       agentName: this.agent?.name ?? this.agentCard.name,
@@ -197,17 +230,21 @@ export class TrustedAgent {
   }
 
   async cancelTask(taskId: string): Promise<TrustedTaskResponse> {
-    const response = await this._a2aClient.cancelTask({ id: taskId });
-
-    if (this._a2aClient.isErrorResponse(response)) {
-      const err = (response as JSONRPCErrorResponse).error;
-      throw new A2AProtocolError(err.message ?? "Failed to cancel task", {
-        rpcCode: err.code,
-      });
+    let task: Task;
+    try {
+      task = await this._a2aClient.cancelTask({ id: taskId });
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err) {
+        throw new A2AProtocolError(
+          (err as { message?: string }).message ?? "Failed to cancel task",
+          { rpcCode: (err as { code: number }).code },
+        );
+      }
+      throw err;
     }
 
     return {
-      response: (response as { result: Task }).result,
+      response: task,
       trustInfo: this.trustInfo,
       agentDid: this.did,
       agentName: this.agent?.name ?? this.agentCard.name,
@@ -225,6 +262,31 @@ export class TrustedAgent {
         trustInfo: this.trustInfo,
       };
     }
+  }
+
+  async setTaskPushNotificationConfig(
+    config: TaskPushNotificationConfig,
+  ): Promise<TaskPushNotificationConfig> {
+    return this._a2aClient.setTaskPushNotificationConfig(config);
+  }
+
+  async getTaskPushNotificationConfig(
+    taskId: string,
+  ): Promise<TaskPushNotificationConfig> {
+    return this._a2aClient.getTaskPushNotificationConfig({ id: taskId });
+  }
+
+  async listTaskPushNotificationConfig(
+    taskId: string,
+  ): Promise<TaskPushNotificationConfig[]> {
+    return this._a2aClient.listTaskPushNotificationConfig({ id: taskId });
+  }
+
+  async deleteTaskPushNotificationConfig(
+    taskId: string,
+    configId: string,
+  ): Promise<void> {
+    await this._a2aClient.deleteTaskPushNotificationConfig({ id: taskId, pushNotificationConfigId: configId });
   }
 
   async refreshCard(): Promise<AgentCard> {

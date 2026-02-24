@@ -58,7 +58,7 @@ The full agent record from the Aletheia registry. Contains metadata like `name`,
 readonly agentCard: AgentCard
 ```
 
-The A2A Agent Card describing the agent's capabilities, skills, and supported interaction modes. This is fetched from the agent's `/.well-known/agent.json` endpoint.
+The A2A Agent Card describing the agent's capabilities, skills, and supported interaction modes. This is fetched from the agent's `/.well-known/agent-card.json` endpoint.
 
 **See:** [A2A Agent Card Specification](https://github.com/a2a-js/sdk#agent-card)
 

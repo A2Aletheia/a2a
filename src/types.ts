@@ -1,4 +1,5 @@
 import type { Agent, AletheiaLogger, AletheiaLogLevel } from "@a2aletheia/sdk";
+import type { FlowRequest } from "@a2aletheia/sdk/agent";
 import type {
   Message,
   Task,
@@ -6,6 +7,11 @@ import type {
   TaskArtifactUpdateEvent,
   Part,
 } from "@a2a-js/sdk";
+import type {
+  ClientConfig,
+  CallInterceptor,
+  AuthenticationHandler,
+} from "@a2a-js/sdk/client";
 
 // ---------------------------------------------------------------------------
 // Re-exports — consumers never need to import @a2a-js/sdk directly
@@ -26,9 +32,19 @@ export type {
   TaskArtifactUpdateEvent,
   MessageSendParams,
   MessageSendConfiguration,
+  TaskPushNotificationConfig,
 } from "@a2a-js/sdk";
 
-export type { A2AClient } from "@a2a-js/sdk/client";
+export type {
+  A2AClient,
+  ClientFactoryOptions,
+  ClientConfig,
+  CallInterceptor,
+  AuthenticationHandler,
+  TransportFactory,
+} from "@a2a-js/sdk/client";
+
+export type { Extensions, HTTP_EXTENSION_HEADER } from "@a2a-js/sdk";
 
 // A2AStreamEventData is not exported from @a2a-js/sdk/client, so we define it
 export type A2AStreamEventData =
@@ -62,6 +78,87 @@ export interface ContextStore {
 export type { RedisLike } from "@a2aletheia/sdk/agent";
 
 // ---------------------------------------------------------------------------
+// Sender identity extension (Layer 1 — Agent-to-Agent)
+// ---------------------------------------------------------------------------
+
+/** Well-known extension URI for Aletheia sender identity. */
+export const SENDER_IDENTITY_EXTENSION = "urn:aletheia:sender-identity:v1";
+
+/** Signing credentials for the local agent (Ed25519). */
+export interface AgentSigningIdentity {
+  /** Agent's DID (did:key:z6Mk... or did:web:...) */
+  did: string;
+  /** Ed25519 private key (hex string) */
+  privateKey: string;
+}
+
+/** Identity envelope attached to outbound messages via metadata. */
+export interface SenderIdentityEnvelope {
+  /** DID of the sender agent */
+  senderDid: string;
+  /** Ed25519 signature (hex string) */
+  signature: string;
+  /** Unix timestamp (ms) when the message was signed */
+  timestamp: number;
+  /** The messageId that was signed — binds signature to this specific message */
+  messageId: string;
+}
+
+/** Result of verifying an inbound message's sender identity. */
+export interface VerifiedSender {
+  /** The sender's DID */
+  did: string;
+  /** Whether the Ed25519 signature was cryptographically valid */
+  signatureValid: boolean;
+  /** Whether the DID document was successfully resolved */
+  didResolved: boolean;
+  /** Timestamp from the sender's signature */
+  signedAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// User delegation extension (Layer 2 — User-to-Agent)
+// ---------------------------------------------------------------------------
+
+/** Well-known extension URI for Aletheia user delegation. */
+export const USER_DELEGATION_EXTENSION = "urn:aletheia:user-delegation:v1";
+
+/** What the user signs via MetaMask (EIP-712 typed data). */
+export interface UserDelegation {
+  /** User's Ethereum address */
+  userAddress: string;
+  /** The agent's DID being delegated to */
+  delegateDid: string;
+  /** Scope of delegation (e.g. "hotel-booking", "*" for all) */
+  scope: string;
+  /** Expiration timestamp (unix seconds) */
+  exp: bigint;
+  /** Nonce to prevent replay */
+  nonce: string;
+}
+
+/** Envelope carrying user delegation in message metadata. */
+export interface UserDelegationEnvelope {
+  delegation: UserDelegation;
+  /** EIP-712 signature from user's wallet (hex string) */
+  signature: string;
+}
+
+/** Result of verifying an inbound user delegation. */
+export interface VerifiedUser {
+  /** Recovered user address */
+  address: string;
+  /** Agent DID this delegation was issued to */
+  delegatedTo: string;
+  /** Scope of delegation */
+  scope: string;
+  /** Whether the delegation is fully valid (signature + not expired + delegate matches) */
+  valid: boolean;
+  /** Whether the delegation has expired */
+  expired: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Package-specific types
 // ---------------------------------------------------------------------------
 
@@ -77,7 +174,40 @@ export interface AletheiaA2AConfig {
   logLevel?: AletheiaLogLevel;
   /** Optional store for persisting conversation context (contextId/taskId). */
   contextStore?: ContextStore;
+
+  // --- Transport & Client options (v0.3.10+) ---
+
+  /** Preferred transport protocols to use. Override agent card preferences. */
+  preferredTransports?: TransportProtocolName[];
+  /** HTTP authentication handler for 401/403 retry flows. */
+  authenticationHandler?: AuthenticationHandler;
+  /** Request interceptors for logging, metrics, custom headers. */
+  interceptors?: CallInterceptor[];
+  /** Polling configuration for non-streaming clients. */
+  polling?: ClientConfig["polling"];
+
+  // --- Sender identity (Layer 1) ---
+
+  /** Sign outbound messages with the agent's Ed25519 key. Requires `signingIdentity`. */
+  signOutboundMessages?: boolean;
+  /** Agent's signing identity (DID + private key). Required when `signOutboundMessages` is true. */
+  signingIdentity?: AgentSigningIdentity;
+  /** Verify sender identity on inbound messages. */
+  verifySenderIdentity?: boolean;
+  /** Reject unsigned inbound messages. Only effective when `verifySenderIdentity` is true. */
+  requireSignedMessages?: boolean;
+  /** Maximum age (ms) for accepting signed messages. Default: 300_000 (5 minutes). */
+  maxMessageAge?: number;
+
+  // --- User delegation (Layer 2) ---
+
+  /** Verify user delegation proofs on inbound messages. */
+  verifyUserDelegation?: boolean;
+  /** Reject messages without valid user delegation. Only effective when `verifyUserDelegation` is true. */
+  requireUserDelegation?: boolean;
 }
+
+export type TransportProtocolName = "JSONRPC" | "HTTP+JSON" | "GRPC";
 
 export interface AgentSelector {
   select(agents: Agent[]): Agent;
@@ -114,6 +244,8 @@ export interface TrustedResponse {
   agentDid: string | null;
   agentName: string;
   duration: number;
+  /** Flow request if agent yielded control to orchestrator */
+  flowRequest?: FlowRequest;
 }
 
 export interface TrustedStreamEvent {
@@ -185,20 +317,49 @@ export function buildMessageParts(input: string | MessageInput): {
   };
 }
 
-export function buildMessageSendParams(
+export async function buildMessageSendParams(
   input: string | MessageInput,
-  options?: SendOptions,
+  options?: SendOptions & {
+    signingIdentity?: AgentSigningIdentity;
+    userDelegation?: UserDelegationEnvelope;
+  },
 ) {
   const { parts, contextId, taskId } = buildMessageParts(input);
+  const messageId = crypto.randomUUID();
+
+  // Build metadata with optional identity extensions
+  let metadata: Record<string, unknown> | undefined;
+
+  if (options?.signingIdentity) {
+    // Lazy import to avoid circular deps
+    const { createSenderEnvelope, computePartsDigest } = await import(
+      "./sender-identity.js"
+    );
+    const digest = await computePartsDigest(parts);
+    const envelope = await createSenderEnvelope(
+      messageId,
+      digest,
+      options.signingIdentity,
+    );
+    metadata = { ...metadata, [SENDER_IDENTITY_EXTENSION]: envelope };
+  }
+
+  if (options?.userDelegation) {
+    metadata = {
+      ...metadata,
+      [USER_DELEGATION_EXTENSION]: options.userDelegation,
+    };
+  }
 
   return {
     message: {
       kind: "message" as const,
       role: "user" as const,
-      messageId: crypto.randomUUID(),
+      messageId,
       parts,
       contextId: options?.contextId ?? contextId,
       taskId: options?.taskId ?? taskId,
+      ...(metadata && { metadata }),
     },
     configuration: {
       acceptedOutputModes: options?.acceptedOutputModes ?? [

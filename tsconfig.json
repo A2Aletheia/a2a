@@ -15,7 +15,8 @@
     "target": "ES2022",
     "outDir": "./dist",
     "rootDir": "./src",
-    "sourceMap": true
+    "sourceMap": true,
+    "composite": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
