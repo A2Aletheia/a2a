@@ -24,7 +24,7 @@
  * ```
  */
 
-import type { FlowType, FlowRequest } from "@a2aletheia/sdk/agent";
+import type { FlowRequest } from "@a2aletheia/sdk/agent";
 
 export type { FlowType, FlowRequest } from "@a2aletheia/sdk/agent";
 

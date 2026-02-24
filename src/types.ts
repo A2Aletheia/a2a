@@ -6,15 +6,11 @@ import type {
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
   Part,
-  TaskPushNotificationConfig,
 } from "@a2a-js/sdk";
 import type {
-  Client as A2AClient,
-  ClientFactoryOptions,
   ClientConfig,
   CallInterceptor,
   AuthenticationHandler,
-  TransportFactory,
 } from "@a2a-js/sdk/client";
 
 // ---------------------------------------------------------------------------

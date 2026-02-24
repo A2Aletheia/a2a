@@ -123,7 +123,6 @@ export class TrustedAgent {
     try {
       result = await this._a2aClient.sendMessage(params);
     } catch (err) {
-      const duration = Date.now() - start;
       if (err && typeof err === "object" && "code" in err) {
         throw new A2AProtocolError(
           (err as { message?: string }).message ?? "A2A protocol error",

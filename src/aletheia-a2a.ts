@@ -16,7 +16,6 @@ import type {
   SendOptions,
   TrustedResponse,
   TrustedStreamEvent,
-  TransportProtocolName,
 } from "./types.js";
 import { buildTrustInfo } from "./types.js";
 import { HighestTrustSelector } from "./agent-selector.js";
