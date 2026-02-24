@@ -97,3 +97,121 @@ Layer 2 protects against:
 - **Stolen delegation reuse** — bound to a specific agent DID
 - **Scope creep** — scoped authorization
 - **Expired credentials** — configurable TTL
+
+---
+
+## Constants
+
+### DELEGATION_DOMAIN
+
+EIP-712 domain for typed data signing.
+
+```typescript
+const DELEGATION_DOMAIN = {
+  name: "Aletheia User Delegation",
+  version: "1",
+} as const;
+```
+
+---
+
+### DELEGATION_TYPES
+
+EIP-712 type definitions for user delegation.
+
+```typescript
+const DELEGATION_TYPES = {
+  UserDelegation: [
+    { name: "userAddress", type: "address" },
+    { name: "delegateDid", type: "string" },
+    { name: "scope", type: "string" },
+    { name: "exp", type: "uint256" },
+    { name: "nonce", type: "string" },
+  ],
+} as const;
+```
+
+---
+
+## API Reference
+
+### signUserDelegation()
+
+Sign a user delegation using a raw private key. For server-side use and tests only.
+
+```typescript
+async function signUserDelegation(
+  delegation: UserDelegation,
+  privateKey: string
+): Promise<UserDelegationEnvelope>
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `delegation` | `UserDelegation` | Delegation object to sign |
+| `privateKey` | `string` | Ethereum private key (hex) |
+
+**Returns:** `Promise<UserDelegationEnvelope>`
+
+---
+
+### verifyUserDelegation()
+
+Verify a user delegation envelope.
+
+```typescript
+async function verifyUserDelegation(
+  envelope: UserDelegationEnvelope,
+  expectedAgentDid?: string
+): Promise<VerifiedUser>
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `envelope` | `UserDelegationEnvelope` | The envelope to verify |
+| `expectedAgentDid` | `string` | Expected delegate DID (from Layer 1 sender) |
+
+**Returns:** `Promise<VerifiedUser>`
+
+---
+
+### extractUserDelegation()
+
+Extract a UserDelegationEnvelope from A2A message metadata.
+
+```typescript
+function extractUserDelegation(
+  metadata?: Record<string, unknown> | null
+): UserDelegationEnvelope | null
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `metadata` | `Record<string, unknown> \| null` | Message metadata |
+
+**Returns:** `UserDelegationEnvelope | null`
+
+---
+
+### getVerifiedUser()
+
+Retrieve the verified user delegation for a request context.
+
+```typescript
+function getVerifiedUser(context: object): VerifiedUser | undefined
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `context` | `object` | Agent context from handler |
+
+**Returns:** `VerifiedUser | undefined`
+

@@ -14,24 +14,8 @@ kramdown:
   input: GFM
   syntax_highlighter: rouge
 
-color_scheme: dark
 search_enabled: true
-search:
-  heading_level: 2
-  previews: 3
-  preview_words_before: 5
-  preview_words_after: 10
-  tokenizer_separator: /[\s/]+/
-  rel_url: false
-  button: false
-
-aux_links:
-  "GitHub": "https://github.com/A2Aletheia/a2a"
-  "npm": "https://www.npmjs.com/package/@a2aletheia/a2a"
-
-aux_links_new_tab: true
-
-nav_sort: case_insensitive
+nav_enabled: true
 
 collections:
   guides:
@@ -53,7 +37,14 @@ defaults:
     values:
       layout: "default"
 
-nav_exclude:
-  - index.md
+aux_links:
+  "GitHub": "https://github.com/A2Aletheia/a2a"
+  "npm": "https://www.npmjs.com/package/@a2aletheia/a2a"
 
-footer_content: "Copyright &copy; A2Aletheia. Distributed under the MIT license."
+aux_links_new_tab: true
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
