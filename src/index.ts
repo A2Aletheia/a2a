@@ -24,7 +24,7 @@ export { RedisTaskStore } from "@a2aletheia/sdk/agent";
 export type { RedisTaskStoreOptions } from "@a2aletheia/sdk/agent";
 
 // SDK agent types (re-exported so consumers use the same SDK instance as @a2aletheia/a2a)
-export { AgentResponse } from "@a2aletheia/sdk/agent";
+export { AgentResponse, AletheiaAgent } from "@a2aletheia/sdk/agent";
 export type {
   AgentContext,
   AgentHandler,

@@ -332,9 +332,8 @@ export async function buildMessageSendParams(
 
   if (options?.signingIdentity) {
     // Lazy import to avoid circular deps
-    const { createSenderEnvelope, computePartsDigest } = await import(
-      "./sender-identity.js"
-    );
+    const { createSenderEnvelope, computePartsDigest } =
+      await import("./sender-identity.js");
     const digest = await computePartsDigest(parts);
     const envelope = await createSenderEnvelope(
       messageId,
@@ -345,9 +344,21 @@ export async function buildMessageSendParams(
   }
 
   if (options?.userDelegation) {
+    // Convert BigInt to string for JSON serialization
+    const delegation = options.userDelegation.delegation;
+    const serializedDelegation = {
+      ...delegation,
+      exp:
+        typeof delegation.exp === "bigint"
+          ? delegation.exp.toString()
+          : delegation.exp,
+    };
     metadata = {
       ...metadata,
-      [USER_DELEGATION_EXTENSION]: options.userDelegation,
+      [USER_DELEGATION_EXTENSION]: {
+        delegation: serializedDelegation,
+        signature: options.userDelegation.signature,
+      },
     };
   }
 

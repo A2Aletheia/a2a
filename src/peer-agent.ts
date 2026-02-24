@@ -4,6 +4,7 @@ import type {
   AletheiaLogLevel,
   AletheiaEventType,
   AletheiaEventHandler,
+  DIDDocument,
 } from "@a2aletheia/sdk";
 import type {
   AgentCard,
@@ -404,5 +405,9 @@ export class PeerAgent {
    */
   getClient(): AletheiaA2A {
     return this.client;
+  }
+
+  buildDIDDocument(did: string): DIDDocument {
+    return this.agent.buildDIDDocument(did);
   }
 }
