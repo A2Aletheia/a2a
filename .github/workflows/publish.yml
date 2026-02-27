@@ -56,6 +56,8 @@ jobs:
           cache: npm
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
+      - name: Set sdk dependency to latest for main publish
+        run: npm pkg set "dependencies.@a2aletheia/sdk=latest"
       - run: npm run build
       - run: npm publish
         env:

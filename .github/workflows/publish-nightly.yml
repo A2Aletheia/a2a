@@ -56,6 +56,8 @@ jobs:
           cache: npm
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
+      - name: Set sdk dependency to nightly for nightly publish
+        run: npm pkg set "dependencies.@a2aletheia/sdk=nightly"
       - run: npm run build
       - name: Set nightly version
         run: |
