@@ -14,7 +14,20 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-      - run: npm ci
+      - name: Set sdk dependency tag for CI checks
+        run: |
+          if [ "${GITHUB_BASE_REF}" = "nightly" ]; then
+            npm pkg set "dependencies.@a2aletheia/sdk=nightly"
+          else
+            npm pkg set "dependencies.@a2aletheia/sdk=latest"
+          fi
+      - name: Install dependencies
+        run: |
+          if [ "${GITHUB_BASE_REF}" = "nightly" ]; then
+            npm install --package-lock=false
+          else
+            npm ci
+          fi
       - run: npm run check-types
 
   lint:
@@ -26,7 +39,20 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-      - run: npm ci
+      - name: Set sdk dependency tag for CI checks
+        run: |
+          if [ "${GITHUB_BASE_REF}" = "nightly" ]; then
+            npm pkg set "dependencies.@a2aletheia/sdk=nightly"
+          else
+            npm pkg set "dependencies.@a2aletheia/sdk=latest"
+          fi
+      - name: Install dependencies
+        run: |
+          if [ "${GITHUB_BASE_REF}" = "nightly" ]; then
+            npm install --package-lock=false
+          else
+            npm ci
+          fi
       - run: npm run lint
 
   build:
@@ -38,7 +64,20 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-      - run: npm ci
+      - name: Set sdk dependency tag for CI checks
+        run: |
+          if [ "${GITHUB_BASE_REF}" = "nightly" ]; then
+            npm pkg set "dependencies.@a2aletheia/sdk=nightly"
+          else
+            npm pkg set "dependencies.@a2aletheia/sdk=latest"
+          fi
+      - name: Install dependencies
+        run: |
+          if [ "${GITHUB_BASE_REF}" = "nightly" ]; then
+            npm install --package-lock=false
+          else
+            npm ci
+          fi
       - run: npm run build
 
   dry-run-publish:
@@ -51,6 +90,19 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-      - run: npm ci
+      - name: Set sdk dependency tag for CI checks
+        run: |
+          if [ "${GITHUB_BASE_REF}" = "nightly" ]; then
+            npm pkg set "dependencies.@a2aletheia/sdk=nightly"
+          else
+            npm pkg set "dependencies.@a2aletheia/sdk=latest"
+          fi
+      - name: Install dependencies
+        run: |
+          if [ "${GITHUB_BASE_REF}" = "nightly" ]; then
+            npm install --package-lock=false
+          else
+            npm ci
+          fi
       - run: npm run build
       - run: npm publish --dry-run
