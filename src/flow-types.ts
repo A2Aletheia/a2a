@@ -25,28 +25,36 @@
  */
 
 import type { FlowRequest } from "@a2aletheia/sdk/agent";
+import type { AmountBasis, SkillAuthorizationConfig } from "./types.js";
 
 export type { FlowType, FlowRequest } from "@a2aletheia/sdk/agent";
 
 export const ORCHESTRATOR_PROTOCOL_URN = "urn:a2a:orchestrator:v1" as const;
 export const FLOW_REQUEST_EXTENSION = "urn:a2a:flow-request:v1" as const;
 
-export interface SkillAuthorization {
-  requireUserDelegation: boolean;
-  scope?: string;
-  reason?: string;
-}
+/**
+ * @deprecated Use `SkillAuthorizationConfig` instead.
+ * Alias for backwards compatibility.
+ */
+export type SkillAuthorization = SkillAuthorizationConfig;
 
 export function requestDelegation(params: {
   scope: string;
   delegateDid: string;
   reason?: string;
+  amount?: {
+    max: string;
+    currency: string;
+  };
+  basis?: AmountBasis;
 }): FlowRequest {
   return {
     type: "urn:a2a:flow:delegation",
     payload: {
       scope: params.scope,
       delegateDid: params.delegateDid,
+      amount: params.amount,
+      basis: params.basis,
     },
     message: params.reason ?? "Authorization required",
   };

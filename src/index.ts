@@ -62,8 +62,12 @@ export {
   signUserDelegation,
   verifyUserDelegation,
   extractUserDelegation,
+  validateScope,
+  validateAmount,
   DELEGATION_DOMAIN,
   DELEGATION_TYPES,
+  DELEGATION_TYPES_WITHOUT_AMOUNT,
+  DELEGATION_TYPES_WITH_AMOUNT,
 } from "./user-delegation.js";
 
 // Package types
@@ -121,6 +125,9 @@ export type {
   CallInterceptor,
   AuthenticationHandler,
   TransportFactory,
+  AmountConstraint,
+  AmountBasis,
+  SkillAuthorizationConfig,
 } from "./types.js";
 
 // Re-exported A2A protocol types (consumers never need @a2a-js/sdk)

@@ -123,6 +123,49 @@ export interface VerifiedSender {
 /** Well-known extension URI for Aletheia user delegation. */
 export const USER_DELEGATION_EXTENSION = "urn:aletheia:user-delegation:v1";
 
+/** Amount constraint for skill-scoped authorization. */
+export interface AmountConstraint {
+  /** Fixed amount (e.g., "5.00") — if set, max and dynamic are ignored */
+  fixed?: string;
+  /** Maximum allowed without re-authorization (e.g., "200.00") */
+  max?: string;
+  /** Currency code (e.g., "USD") */
+  currency: string;
+  /** Allow LLM/agent to determine amount dynamically */
+  dynamic?: boolean;
+}
+
+/** Structured basis for transparent amount breakdown. */
+export interface AmountBasis {
+  /** Human-readable description (e.g., "Hotel booking") */
+  description: string;
+  /** Itemized breakdown */
+  items: Array<{
+    /** Item label (e.g., "Room rate") */
+    label: string;
+    /** Quantity (e.g., 3 nights) */
+    quantity?: number;
+    /** Unit price (e.g., "100.00") */
+    unitPrice?: string;
+    /** Total amount (e.g., "300.00") */
+    amount: string;
+  }>;
+  /** Total amount */
+  total: string;
+}
+
+/** Per-skill authorization config. */
+export interface SkillAuthorizationConfig {
+  /** Whether user delegation is required for this skill */
+  requireUserDelegation: boolean;
+  /** Scope string (e.g., "hotel-booking", "payment") */
+  scope?: string;
+  /** Human-readable reason for authorization */
+  reason?: string;
+  /** Amount constraint for spending authorization */
+  amount?: AmountConstraint;
+}
+
 /** What the user signs via MetaMask (EIP-712 typed data). */
 export interface UserDelegation {
   /** User's Ethereum address */
@@ -135,6 +178,13 @@ export interface UserDelegation {
   exp: bigint;
   /** Nonce to prevent replay */
   nonce: string;
+  /** Optional spending limit */
+  amountLimit?: {
+    /** Maximum amount allowed */
+    max: string;
+    /** Currency code */
+    currency: string;
+  };
 }
 
 /** Envelope carrying user delegation in message metadata. */
@@ -156,6 +206,13 @@ export interface VerifiedUser {
   valid: boolean;
   /** Whether the delegation has expired */
   expired: boolean;
+  /** The amount limit from delegation, if present */
+  amountLimit?: {
+    /** Maximum amount allowed */
+    max: string;
+    /** Currency code */
+    currency: string;
+  };
 }
 
 // ---------------------------------------------------------------------------
