@@ -127,6 +127,7 @@ export class AletheiaA2A {
   async discover(params: {
     capability?: string;
     query?: string;
+    queryEmbedding?: number[];
     isLive?: boolean;
     minTrustScore?: number;
     limit?: number;
@@ -136,6 +137,7 @@ export class AletheiaA2A {
     const result = await this.aletheiaClient.discoverAgents({
       capability: params.capability,
       query: params.query,
+      queryEmbedding: params.queryEmbedding,
       isLive: params.isLive ?? (this.pipelineConfig.requireLive ? true : false),
       minTrustScore:
         params.minTrustScore ??
