@@ -83,11 +83,13 @@ export {
   requestDelegation,
   requestPayment,
   requestConfirmation,
+  requestOAuth,
   isFlowRequest,
   extractFlowRequest,
   isDelegationFlow,
   isPaymentFlow,
   isConfirmationFlow,
+  isOAuthFlow,
 } from "./flow-types.js";
 export type {
   FlowType,

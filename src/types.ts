@@ -284,6 +284,8 @@ export interface SendOptions {
   contextId?: string;
   taskId?: string;
   timeoutMs?: number;
+  /** Additional message metadata forwarded to agent context.userMessage.metadata. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface TrustInfo {
@@ -385,7 +387,9 @@ export async function buildMessageSendParams(
   const messageId = crypto.randomUUID();
 
   // Build metadata with optional identity extensions
-  let metadata: Record<string, unknown> | undefined;
+  let metadata: Record<string, unknown> | undefined = options?.metadata
+    ? { ...options.metadata }
+    : undefined;
 
   if (options?.signingIdentity) {
     // Lazy import to avoid circular deps

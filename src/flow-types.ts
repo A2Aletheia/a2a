@@ -2,7 +2,7 @@
  * Flow types and utilities for orchestrator-agent communication.
  *
  * A flow is a request from an agent to the orchestrator to execute
- * a user interaction (delegation, payment, confirmation) before
+ * a user interaction (delegation, payment, confirmation, oauth) before
  * continuing the conversation.
  *
  * @example
@@ -24,7 +24,7 @@
  * ```
  */
 
-import type { FlowRequest } from "@a2aletheia/sdk/agent";
+import type { FlowRequest, OAuthFlowRequest } from "@a2aletheia/sdk/agent";
 import type { AmountBasis, SkillAuthorizationConfig } from "./types.js";
 
 export type { FlowType, FlowRequest } from "@a2aletheia/sdk/agent";
@@ -54,7 +54,7 @@ export function requestDelegation(params: {
       scope: params.scope,
       delegateDid: params.delegateDid,
       amount: params.amount,
-      basis: params.basis,
+      basis: params.basis as Record<string, unknown> | undefined,
     },
     message: params.reason ?? "Authorization required",
   };
@@ -90,6 +90,25 @@ export function requestConfirmation(params: {
   };
 }
 
+export function requestOAuth(params: {
+  provider: string;
+  authUrl: string;
+  grantId: string;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}): OAuthFlowRequest {
+  return {
+    type: "urn:a2a:flow:oauth",
+    payload: {
+      ...(params.metadata ?? {}),
+      provider: params.provider,
+      authUrl: params.authUrl,
+      grantId: params.grantId,
+    },
+    message: params.reason ?? "OAuth authorization required",
+  };
+}
+
 export function isFlowRequest(data: unknown): data is FlowRequest {
   if (typeof data !== "object" || data === null) return false;
   const obj = data as Record<string, unknown>;
@@ -97,6 +116,7 @@ export function isFlowRequest(data: unknown): data is FlowRequest {
     typeof obj.type === "string" &&
     obj.type.startsWith("urn:a2a:flow:") &&
     typeof obj.payload === "object" &&
+    obj.payload !== null &&
     typeof obj.message === "string"
   );
 }
@@ -120,4 +140,8 @@ export function isPaymentFlow(flow: FlowRequest): boolean {
 
 export function isConfirmationFlow(flow: FlowRequest): boolean {
   return flow.type === "urn:a2a:flow:confirmation";
+}
+
+export function isOAuthFlow(flow: { type: string }): boolean {
+  return flow.type === "urn:a2a:flow:oauth";
 }

@@ -5,7 +5,13 @@ import {
   signUserDelegation,
   verifyUserDelegation,
 } from "../user-delegation.js";
-import { requestDelegation, extractFlowRequest, FLOW_REQUEST_EXTENSION } from "../flow-types.js";
+import {
+  requestDelegation,
+  requestOAuth,
+  extractFlowRequest,
+  FLOW_REQUEST_EXTENSION,
+  isOAuthFlow,
+} from "../flow-types.js";
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import type { UserDelegation, AmountBasis } from "../types.js";
 
@@ -100,6 +106,7 @@ describe("skill-authorization", () => {
       });
 
       expect(flow.payload.basis).toEqual(basis);
+      expect(flow.payload.basis).toBe(basis);
     });
 
     it("extracts flow from metadata", () => {
@@ -114,6 +121,66 @@ describe("skill-authorization", () => {
 
       expect(extracted).not.toBeNull();
       expect(extracted!.payload.amount).toEqual({ max: "100.00", currency: "USD" });
+    });
+  });
+
+  describe("oauth flow helpers", () => {
+    it("creates oauth flow request with required payload", () => {
+      const flow = requestOAuth({
+        provider: "notion",
+        authUrl: "https://notion.so/oauth/authorize?state=abc",
+        grantId: "grant-123",
+        reason: "Connect your Notion account",
+        metadata: { contextId: "ctx-1", redirectUri: "https://app.example.com/callback" },
+      });
+
+      expect(flow.type).toBe("urn:a2a:flow:oauth");
+      expect(flow.payload.provider).toBe("notion");
+      expect(flow.payload.authUrl).toBe(
+        "https://notion.so/oauth/authorize?state=abc",
+      );
+      expect(flow.payload.grantId).toBe("grant-123");
+      expect(flow.payload.contextId).toBe("ctx-1");
+      expect(flow.payload.redirectUri).toBe("https://app.example.com/callback");
+      expect(flow.message).toBe("Connect your Notion account");
+      expect(isOAuthFlow(flow)).toBe(true);
+    });
+
+    it("keeps helper arguments authoritative over colliding oauth metadata", () => {
+      const flow = requestOAuth({
+        provider: "notion",
+        authUrl: "https://notion.so/oauth/authorize?state=abc",
+        grantId: "grant-123",
+        metadata: {
+          provider: "github",
+          authUrl: "https://github.com/login/oauth/authorize",
+          grantId: "grant-overridden",
+          contextId: "ctx-1",
+        },
+      });
+
+      expect(flow.payload.provider).toBe("notion");
+      expect(flow.payload.authUrl).toBe(
+        "https://notion.so/oauth/authorize?state=abc",
+      );
+      expect(flow.payload.grantId).toBe("grant-123");
+      expect(flow.payload.contextId).toBe("ctx-1");
+    });
+
+    it("extracts oauth flow from metadata", () => {
+      const flow = requestOAuth({
+        provider: "notion",
+        authUrl: "https://notion.so/oauth/authorize?state=abc",
+        grantId: "grant-123",
+      });
+
+      const metadata = { [FLOW_REQUEST_EXTENSION]: flow };
+      const extracted = extractFlowRequest(metadata);
+
+      expect(extracted).not.toBeNull();
+      expect(extracted?.type).toBe("urn:a2a:flow:oauth");
+      expect(extracted && isOAuthFlow(extracted)).toBe(true);
+      expect(extracted?.payload.grantId).toBe("grant-123");
     });
   });
 

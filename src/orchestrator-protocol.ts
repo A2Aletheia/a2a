@@ -29,7 +29,7 @@ export interface OrchestratorProtocol {
  *     extensions: {
  *       [ORCHESTRATOR_PROTOCOL_URN]: {
  *         version: "1.0",
- *         flows: ["delegation", "payment"],
+ *         flows: ["delegation", "payment", "oauth"],
  *       },
  *     },
  *   },
