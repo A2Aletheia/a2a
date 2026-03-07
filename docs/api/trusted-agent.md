@@ -103,6 +103,16 @@ if (agent.supportsStreaming) {
 
 ---
 
+### `supportsPushNotifications`
+
+```typescript
+get supportsPushNotifications(): boolean
+```
+
+Returns `true` if the agent supports push notifications for task updates. Determined by checking `agentCard.capabilities.pushNotifications`.
+
+---
+
 ### `contextId`
 
 ```typescript
@@ -472,6 +482,146 @@ await agent.send("What's the weather in Tokyo?"); // New context
 ```
 
 **Persistence:** If a `ContextStore` is configured, this method also deletes the persisted context from the store.
+
+---
+
+### `setUserDelegation(delegation)`
+
+```typescript
+setUserDelegation(delegation: UserDelegationEnvelope | null): void
+```
+
+Attach a user delegation envelope to all subsequent outbound messages. Call with `null` to clear.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `delegation` | `UserDelegationEnvelope \| null` | Yes | Delegation envelope from user wallet signature, or `null` to clear |
+
+**Returns:** `void`
+
+**When to Use:**
+
+- After user signs delegation via MetaMask/wagmi on frontend
+- Before calling `send()` or `stream()` that requires user authorization
+- To clear delegation when switching users
+
+**Example:**
+
+```typescript
+// Frontend: user signs with wagmi
+const signature = await signTypedDataAsync({
+  domain: DELEGATION_DOMAIN,
+  types: DELEGATION_TYPES,
+  primaryType: "UserDelegation",
+  message: delegation,
+});
+
+// Backend: attach to TrustedAgent
+agent.setUserDelegation({ delegation, signature });
+
+// Subsequent messages carry the delegation
+await agent.send("Book a hotel room");
+
+// Clear when done
+agent.setUserDelegation(null);
+```
+
+---
+
+### `setTaskPushNotificationConfig(config)`
+
+```typescript
+async setTaskPushNotificationConfig(
+  config: TaskPushNotificationConfig
+): Promise<TaskPushNotificationConfig>
+```
+
+Configure push notifications for a task. Requires `supportsPushNotifications` to be `true`.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `config` | `TaskPushNotificationConfig` | Yes | Push notification configuration |
+
+**Returns:** `Promise<TaskPushNotificationConfig>`
+
+**Example:**
+
+```typescript
+if (agent.supportsPushNotifications) {
+  await agent.setTaskPushNotificationConfig({
+    taskId: "task-123",
+    pushNotificationConfig: {
+      url: "https://my-app.com/webhook",
+    },
+  });
+}
+```
+
+---
+
+### `getTaskPushNotificationConfig(taskId)`
+
+```typescript
+async getTaskPushNotificationConfig(
+  taskId: string
+): Promise<TaskPushNotificationConfig>
+```
+
+Get the push notification configuration for a task.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `taskId` | `string` | Yes | The task ID |
+
+**Returns:** `Promise<TaskPushNotificationConfig>`
+
+---
+
+### `listTaskPushNotificationConfig(taskId)`
+
+```typescript
+async listTaskPushNotificationConfig(
+  taskId: string
+): Promise<TaskPushNotificationConfig[]>
+```
+
+List all push notification configurations for a task.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `taskId` | `string` | Yes | The task ID |
+
+**Returns:** `Promise<TaskPushNotificationConfig[]>`
+
+---
+
+### `deleteTaskPushNotificationConfig(taskId, configId)`
+
+```typescript
+async deleteTaskPushNotificationConfig(
+  taskId: string,
+  configId: string
+): Promise<void>
+```
+
+Delete a push notification configuration.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `taskId` | `string` | Yes | The task ID |
+| `configId` | `string` | Yes | The push notification config ID |
+
+**Returns:** `Promise<void>`
 
 ---
 

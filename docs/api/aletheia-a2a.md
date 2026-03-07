@@ -38,6 +38,20 @@ constructor(config?: AletheiaA2AConfig)
 | `logger` | `AletheiaLogger` | Custom logger instance. Defaults to `ConsoleLogger`. | No |
 | `logLevel` | `AletheiaLogLevel` | Logging verbosity: `"debug"` \| `"info"` \| `"warn"` \| `"error"`. | No |
 | `contextStore` | `ContextStore` | Store for persisting conversation context across restarts. | No |
+| **Transport & Client** |
+| `preferredTransports` | `TransportProtocolName[]` | Preferred transport protocols: `"JSONRPC"` \| `"HTTP+JSON"` \| `"GRPC"`. | No |
+| `authenticationHandler` | `AuthenticationHandler` | HTTP authentication handler for 401/403 retry flows. | No |
+| `interceptors` | `CallInterceptor[]` | Request interceptors for logging, metrics, custom headers. | No |
+| `polling` | `ClientConfig["polling"]` | Polling configuration for non-streaming clients. | No |
+| **Sender Identity (Layer 1)** |
+| `signOutboundMessages` | `boolean` | Sign outbound messages with Ed25519 key. Requires `signingIdentity`. | No |
+| `signingIdentity` | `AgentSigningIdentity` | Agent's DID + Ed25519 private key for signing. | No |
+| `verifySenderIdentity` | `boolean` | Verify sender identity on inbound messages. | No |
+| `requireSignedMessages` | `boolean` | Reject unsigned inbound messages. | No |
+| `maxMessageAge` | `number` | Maximum age (ms) for accepting signed messages. Default: 300000 (5 min). | No |
+| **User Delegation (Layer 2)** |
+| `verifyUserDelegation` | `boolean` | Verify user delegation proofs on inbound messages. | No |
+| `requireUserDelegation` | `boolean` | Reject messages without valid user delegation. | No |
 
 ### Example
 

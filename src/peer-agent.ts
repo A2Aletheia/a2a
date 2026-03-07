@@ -4,6 +4,7 @@ import type {
   AletheiaLogLevel,
   AletheiaEventType,
   AletheiaEventHandler,
+  DIDDocument,
 } from "@a2aletheia/sdk";
 import type {
   AgentCard,
@@ -28,6 +29,7 @@ import type {
   TrustedResponse,
   TrustedStreamEvent,
   TransportProtocolName,
+  SkillAuthorizationConfig,
 } from "./types.js";
 import type {
   CallInterceptor,
@@ -43,7 +45,11 @@ import {
   extractUserDelegation,
   verifyUserDelegation,
   setVerifiedUser,
+  validateScope,
+  validateAmount,
+  getVerifiedUser,
 } from "./user-delegation.js";
+import { requestDelegation } from "./flow-types.js";
 import type { TrustedAgent } from "./trusted-agent.js";
 
 // ---------------------------------------------------------------------------
@@ -99,12 +105,14 @@ export interface PeerAgentConfig {
   /** Maximum age (ms) for accepting signed messages. Default: 300_000 (5 minutes). */
   maxMessageAge?: number;
 
-  // --- User delegation (Layer 2) ---
+// --- User delegation (Layer 2) ---
 
   /** Verify user delegation proofs on inbound messages. */
   verifyUserDelegation?: boolean;
   /** Reject messages without valid user delegation. */
   requireUserDelegation?: boolean;
+  /** Per-skill authorization config. Overrides global requireUserDelegation. */
+  skillAuthorization?: Record<string, SkillAuthorizationConfig>;
 
   // Observability (BYOL)
   logger?: AletheiaLogger;
@@ -114,6 +122,14 @@ export interface PeerAgentConfig {
 // ---------------------------------------------------------------------------
 // PeerAgent
 // ---------------------------------------------------------------------------
+
+function extractSkillId(
+  metadata?: Record<string, unknown> | null,
+): string | null {
+  if (!metadata) return null;
+  const skillId = metadata.skillId;
+  return typeof skillId === "string" ? skillId : null;
+}
 
 /**
  * A full-duplex peer that can both host an A2A agent (inbound) and
@@ -236,7 +252,7 @@ export class PeerAgent {
         }
       }
 
-      // --- Layer 2: User delegation verification ---
+// --- Layer 2: User delegation verification ---
       if (config.verifyUserDelegation) {
         const delegationEnvelope = extractUserDelegation(metadata);
         if (delegationEnvelope) {
@@ -248,6 +264,59 @@ export class PeerAgent {
         } else if (config.requireUserDelegation) {
           response.fail("User delegation proof is required by this agent");
           return;
+        }
+      }
+
+      // --- Skill-scoped authorization ---
+      const skillId = extractSkillId(metadata);
+      const skillConfig = skillId
+        ? config.skillAuthorization?.[skillId]
+        : undefined;
+
+      if (skillConfig?.requireUserDelegation && skillId) {
+        const user = getVerifiedUser(context);
+        const agentDid = config.signingIdentity?.did;
+        if (!user?.valid) {
+          response.flow(
+            requestDelegation({
+              scope: skillConfig.scope ?? skillId,
+              delegateDid: agentDid ?? "",
+              reason: skillConfig.reason,
+              amount: skillConfig.amount
+                ? { max: skillConfig.amount.max ?? "0", currency: skillConfig.amount.currency }
+                : undefined,
+            }),
+          );
+          return;
+        }
+
+        if (skillConfig.scope && !validateScope(user.scope, skillConfig.scope)) {
+          response.fail(
+            `Insufficient scope: required "${skillConfig.scope}", granted "${user.scope}"`,
+          );
+          return;
+        }
+
+        if (skillConfig.amount?.fixed) {
+          const amountValidation = validateAmount(
+            skillConfig.amount.fixed,
+            skillConfig.amount.currency,
+            user.amountLimit,
+          );
+          if (!amountValidation.valid) {
+            response.flow(
+              requestDelegation({
+                scope: skillConfig.scope ?? skillId,
+                delegateDid: agentDid ?? "",
+                reason: `Amount exceeds authorized limit. Requested: ${skillConfig.amount.fixed} ${skillConfig.amount.currency}`,
+                amount: {
+                  max: skillConfig.amount.fixed,
+                  currency: skillConfig.amount.currency,
+                },
+              }),
+            );
+            return;
+          }
         }
       }
 
@@ -404,5 +473,9 @@ export class PeerAgent {
    */
   getClient(): AletheiaA2A {
     return this.client;
+  }
+
+  buildDIDDocument(did: string): DIDDocument {
+    return this.agent.buildDIDDocument(did);
   }
 }

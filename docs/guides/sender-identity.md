@@ -82,3 +82,110 @@ Layer 1 protects against:
 - **Agent impersonation** — wrong key produces an invalid signature
 - **Replay attacks** — 5-minute timestamp window
 - **Message tampering** — parts digest is signed
+
+---
+
+## API Reference
+
+### computePartsDigest()
+
+Compute a SHA-256 digest of message parts for signing.
+
+```typescript
+async function computePartsDigest(parts: unknown[]): Promise<string>
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `parts` | `unknown[]` | Message parts to digest |
+
+**Returns:** `Promise<string>` - Hex-encoded SHA-256 digest
+
+---
+
+### createSenderEnvelope()
+
+Sign an outbound message and produce a SenderIdentityEnvelope.
+
+```typescript
+async function createSenderEnvelope(
+  messageId: string,
+  partsDigest: string,
+  identity: AgentSigningIdentity
+): Promise<SenderIdentityEnvelope>
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `messageId` | `string` | Unique message identifier |
+| `partsDigest` | `string` | SHA-256 digest of message parts |
+| `identity` | `AgentSigningIdentity` | Agent's DID and private key |
+
+**Returns:** `Promise<SenderIdentityEnvelope>`
+
+---
+
+### extractSenderEnvelope()
+
+Extract a SenderIdentityEnvelope from A2A message metadata.
+
+```typescript
+function extractSenderEnvelope(
+  metadata?: Record<string, unknown> | null
+): SenderIdentityEnvelope | null
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `metadata` | `Record<string, unknown> \| null` | Message metadata |
+
+**Returns:** `SenderIdentityEnvelope | null`
+
+---
+
+### verifySenderEnvelope()
+
+Verify a SenderIdentityEnvelope from an inbound message.
+
+```typescript
+async function verifySenderEnvelope(
+  envelope: SenderIdentityEnvelope,
+  partsDigest: string,
+  options?: { maxMessageAge?: number }
+): Promise<VerifiedSender>
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `envelope` | `SenderIdentityEnvelope` | The envelope to verify |
+| `partsDigest` | `string` | Expected parts digest |
+| `options.maxMessageAge` | `number` | Maximum message age in ms (default: 300000) |
+
+**Returns:** `Promise<VerifiedSender>`
+
+---
+
+### getVerifiedSender()
+
+Retrieve the verified sender identity for a request context.
+
+```typescript
+function getVerifiedSender(context: object): VerifiedSender | undefined
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `context` | `object` | Agent context from handler |
+
+**Returns:** `VerifiedSender | undefined`
+

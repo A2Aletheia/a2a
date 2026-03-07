@@ -14,6 +14,8 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+      - name: Set sdk dependency to latest for main checks
+        run: npm pkg set "dependencies.@a2aletheia/sdk=latest"
       - run: npm ci
       - run: npm run check-types
 
@@ -26,6 +28,8 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+      - name: Set sdk dependency to latest for main checks
+        run: npm pkg set "dependencies.@a2aletheia/sdk=latest"
       - run: npm ci
       - run: npm run lint
 
@@ -38,6 +42,8 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+      - name: Set sdk dependency to latest for main checks
+        run: npm pkg set "dependencies.@a2aletheia/sdk=latest"
       - run: npm ci
       - run: npm run build
 
@@ -55,6 +61,8 @@ jobs:
           node-version: "20"
           cache: npm
           registry-url: "https://registry.npmjs.org"
+      - name: Set sdk dependency to latest for main publish
+        run: npm pkg set "dependencies.@a2aletheia/sdk=latest"
       - run: npm ci
       - run: npm run build
       - run: npm publish

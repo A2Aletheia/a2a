@@ -20,7 +20,13 @@ import {
   AgentNotLiveError,
   TrustScoreBelowThresholdError,
   A2AProtocolError,
-} from "@aletheia/a2a";
+  TaskNotFoundError,
+  TaskNotCancelableError,
+  PushNotificationNotSupportedError,
+  ContentTypeNotSupportedError,
+  InvalidAgentResponseError,
+  AuthenticatedExtendedCardNotConfiguredError,
+} from "@a2aletheia/a2a";
 ```
 
 ---
@@ -91,7 +97,7 @@ constructor(message: string, options?: { cause?: Error })
 ### Example
 
 ```typescript
-import { AgentNotFoundError } from "@aletheia/a2a";
+import { AgentNotFoundError } from "@a2aletheia/a2a";
 
 try {
   const agent = await client.findAgent({ capability: "nonexistent-capability" });
@@ -127,7 +133,7 @@ constructor(message: string, options?: { cause?: Error })
 ### Example
 
 ```typescript
-import { DIDResolutionError } from "@aletheia/a2a";
+import { DIDResolutionError } from "@a2aletheia/a2a";
 
 try {
   const didDocument = await client.resolveDID("did:example:invalid");
@@ -165,7 +171,7 @@ constructor(message: string, options?: { cause?: Error })
 ### Example
 
 ```typescript
-import { AgentNotLiveError } from "@aletheia/a2a";
+import { AgentNotLiveError } from "@a2aletheia/a2a";
 
 try {
   await client.sendMessage(agentDID, message);
@@ -213,7 +219,7 @@ constructor(
 ### Example
 
 ```typescript
-import { TrustScoreBelowThresholdError } from "@aletheia/a2a";
+import { TrustScoreBelowThresholdError } from "@a2aletheia/a2a";
 
 try {
   await client.executeAction(agentDID, action);
@@ -261,7 +267,7 @@ constructor(
 ### Example
 
 ```typescript
-import { A2AProtocolError } from "@aletheia/a2a";
+import { A2AProtocolError } from "@a2aletheia/a2a";
 
 try {
   await client.invokeMethod(agentDID, method, params);
@@ -283,6 +289,157 @@ try {
 
 ---
 
+## TaskNotFoundError
+
+Thrown when a task cannot be found by its ID.
+
+- **Code:** `TASK_NOT_FOUND`
+
+### Constructor
+
+```typescript
+constructor(message: string, options?: { cause?: Error; taskId?: string })
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `message` | `string` | Description of the error |
+| `options` | `{ cause?: Error; taskId?: string }` | Optional error options with task ID |
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `taskId` | `string \| undefined` | The task ID that was not found |
+
+### Example
+
+```typescript
+import { TaskNotFoundError } from "@a2aletheia/a2a";
+
+try {
+  const task = await agent.getTask("nonexistent-task-id");
+} catch (error) {
+  if (error instanceof TaskNotFoundError) {
+    console.error(`Task not found: ${error.taskId}`);
+  }
+}
+```
+
+---
+
+## TaskNotCancelableError
+
+Thrown when attempting to cancel a task that cannot be canceled.
+
+- **Code:** `TASK_NOT_CANCELABLE`
+
+### Constructor
+
+```typescript
+constructor(message: string, options?: { cause?: Error; taskId?: string })
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `message` | `string` | Description of the error |
+| `options` | `{ cause?: Error; taskId?: string }` | Optional error options with task ID |
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `taskId` | `string \| undefined` | The task ID that cannot be canceled |
+
+---
+
+## PushNotificationNotSupportedError
+
+Thrown when push notifications are requested but not supported by the agent.
+
+- **Code:** `PUSH_NOTIFICATION_NOT_SUPPORTED`
+
+### Constructor
+
+```typescript
+constructor(message: string, options?: { cause?: Error })
+```
+
+**Example:**
+
+```typescript
+import { PushNotificationNotSupportedError } from "@a2aletheia/a2a";
+
+try {
+  await agent.setTaskPushNotificationConfig(config);
+} catch (error) {
+  if (error instanceof PushNotificationNotSupportedError) {
+    console.error("Agent does not support push notifications");
+    // Fall back to polling
+  }
+}
+```
+
+---
+
+## ContentTypeNotSupportedError
+
+Thrown when a content type is not supported by the agent.
+
+- **Code:** `CONTENT_TYPE_NOT_SUPPORTED`
+
+### Constructor
+
+```typescript
+constructor(message: string, options?: { cause?: Error; contentType?: string })
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `contentType` | `string \| undefined` | The unsupported content type |
+
+---
+
+## InvalidAgentResponseError
+
+Thrown when an agent returns an invalid or malformed response.
+
+- **Code:** `INVALID_AGENT_RESPONSE`
+
+### Constructor
+
+```typescript
+constructor(message: string, options?: { cause?: Error; response?: unknown })
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `response` | `unknown` | The invalid response data |
+
+---
+
+## AuthenticatedExtendedCardNotConfiguredError
+
+Thrown when an authenticated extended card is requested but not configured.
+
+- **Code:** `AUTHENTICATED_EXTENDED_CARD_NOT_CONFIGURED`
+
+### Constructor
+
+```typescript
+constructor(message: string, options?: { cause?: Error })
+```
+
+---
+
 ## Error Handling Best Practices
 
 ### Catching Specific Errors
@@ -295,7 +452,7 @@ import {
   AgentNotFoundError,
   AgentNotLiveError,
   TrustScoreBelowThresholdError,
-} from "@aletheia/a2a";
+} from "@a2aletheia/a2a";
 
 try {
   await client.performOperation();

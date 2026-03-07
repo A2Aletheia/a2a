@@ -23,7 +23,7 @@ export const DELEGATION_DOMAIN = {
   version: "1",
 } as const;
 
-export const DELEGATION_TYPES = {
+export const DELEGATION_TYPES_WITHOUT_AMOUNT = {
   UserDelegation: [
     { name: "userAddress", type: "address" },
     { name: "delegateDid", type: "string" },
@@ -32,6 +32,23 @@ export const DELEGATION_TYPES = {
     { name: "nonce", type: "string" },
   ],
 } as const;
+
+export const DELEGATION_TYPES_WITH_AMOUNT = {
+  AmountLimit: [
+    { name: "max", type: "string" },
+    { name: "currency", type: "string" },
+  ],
+  UserDelegation: [
+    { name: "userAddress", type: "address" },
+    { name: "delegateDid", type: "string" },
+    { name: "scope", type: "string" },
+    { name: "exp", type: "uint256" },
+    { name: "nonce", type: "string" },
+    { name: "amountLimit", type: "AmountLimit" },
+  ],
+} as const;
+
+export const DELEGATION_TYPES = DELEGATION_TYPES_WITHOUT_AMOUNT;
 
 // WeakMap for request-scoped verified user storage
 const verifiedUserMap = new WeakMap<object, VerifiedUser>();
@@ -52,17 +69,35 @@ export async function signUserDelegation(
 ): Promise<UserDelegationEnvelope> {
   const account = privateKeyToAccount(privateKey as Hex);
 
+  const hasAmountLimit = delegation.amountLimit !== undefined;
+
+  const types = hasAmountLimit
+    ? DELEGATION_TYPES_WITH_AMOUNT
+    : DELEGATION_TYPES_WITHOUT_AMOUNT;
+
+  const message = hasAmountLimit
+    ? {
+        userAddress: delegation.userAddress as Hex,
+        delegateDid: delegation.delegateDid,
+        scope: delegation.scope,
+        exp: BigInt(delegation.exp),
+        nonce: delegation.nonce,
+        amountLimit: delegation.amountLimit,
+      }
+    : {
+        userAddress: delegation.userAddress as Hex,
+        delegateDid: delegation.delegateDid,
+        scope: delegation.scope,
+        exp: BigInt(delegation.exp),
+        nonce: delegation.nonce,
+      };
+
   const signature = await account.signTypedData({
     domain: DELEGATION_DOMAIN,
-    types: DELEGATION_TYPES,
+    types,
     primaryType: "UserDelegation",
-    message: {
-      userAddress: delegation.userAddress as Hex,
-      delegateDid: delegation.delegateDid,
-      scope: delegation.scope,
-      exp: BigInt(delegation.exp),
-      nonce: delegation.nonce,
-    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    message: message as any,
   });
 
   return { delegation, signature };
@@ -86,29 +121,44 @@ export async function verifyUserDelegation(
 ): Promise<VerifiedUser> {
   const { delegation, signature } = envelope;
 
-  // 1. Check expiration
   const nowSec = BigInt(Math.floor(Date.now() / 1000));
   const expired = nowSec > BigInt(delegation.exp);
 
-  // 2. Check delegateDid matches sender agent (if Layer 1 provided)
   const delegateMatch = expectedAgentDid
     ? delegation.delegateDid === expectedAgentDid
-    : true; // No Layer 1 context — skip this check
+    : true;
 
-  // 3. Recover signer address via EIP-712
-  let recoveredAddress: string;
-  try {
-    recoveredAddress = await recoverTypedDataAddress({
-      domain: DELEGATION_DOMAIN,
-      types: DELEGATION_TYPES,
-      primaryType: "UserDelegation",
-      message: {
+  const hasAmountLimit = delegation.amountLimit !== undefined;
+
+  const types = hasAmountLimit
+    ? DELEGATION_TYPES_WITH_AMOUNT
+    : DELEGATION_TYPES_WITHOUT_AMOUNT;
+
+  const message = hasAmountLimit
+    ? {
         userAddress: delegation.userAddress as Hex,
         delegateDid: delegation.delegateDid,
         scope: delegation.scope,
         exp: BigInt(delegation.exp),
         nonce: delegation.nonce,
-      },
+        amountLimit: delegation.amountLimit,
+      }
+    : {
+        userAddress: delegation.userAddress as Hex,
+        delegateDid: delegation.delegateDid,
+        scope: delegation.scope,
+        exp: BigInt(delegation.exp),
+        nonce: delegation.nonce,
+      };
+
+  let recoveredAddress: string;
+  try {
+    recoveredAddress = await recoverTypedDataAddress({
+      domain: DELEGATION_DOMAIN,
+      types,
+      primaryType: "UserDelegation",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      message: message as any,
       signature: signature as Hex,
     });
   } catch {
@@ -118,10 +168,10 @@ export async function verifyUserDelegation(
       scope: delegation.scope,
       valid: false,
       expired,
+      amountLimit: delegation.amountLimit,
     };
   }
 
-  // 4. Verify recovered address matches claimed user
   const addressMatch =
     recoveredAddress.toLowerCase() === delegation.userAddress.toLowerCase();
 
@@ -131,6 +181,7 @@ export async function verifyUserDelegation(
     scope: delegation.scope,
     valid: !expired && delegateMatch && addressMatch,
     expired,
+    amountLimit: delegation.amountLimit,
   };
 }
 
@@ -208,4 +259,65 @@ export function setVerifiedUser(context: object, user: VerifiedUser): void {
  */
 export function getVerifiedUser(context: object): VerifiedUser | undefined {
   return verifiedUserMap.get(context);
+}
+
+// ---------------------------------------------------------------------------
+// Scope validation (OAuth-style)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate OAuth-style scope strings.
+ *
+ * @param granted - The scope(s) granted by the user (e.g., "*", "hotel-booking", "payment hotel-booking")
+ * @param required - The scope required by the skill (e.g., "hotel-booking")
+ * @returns true if the granted scope satisfies the required scope
+ */
+export function validateScope(granted: string, required: string): boolean {
+  if (granted === "*") return true;
+  if (granted === required) return true;
+
+  const grantedScopes = granted.split(" ").filter(Boolean);
+  return grantedScopes.includes(required);
+}
+
+// ---------------------------------------------------------------------------
+// Amount validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate amount against delegation limit.
+ *
+ * @param requestedAmount - The amount requested (as string, e.g., "150.00")
+ * @param requestedCurrency - The currency (e.g., "USD")
+ * @param delegationLimit - The delegation's amount limit (optional)
+ * @returns Validation result with exceedsBy if over limit
+ */
+export function validateAmount(
+  requestedAmount: string,
+  requestedCurrency: string,
+  delegationLimit?: { max: string; currency: string },
+): { valid: boolean; exceedsBy?: string } {
+  if (!delegationLimit) {
+    return { valid: true };
+  }
+
+  if (requestedCurrency !== delegationLimit.currency) {
+    return { valid: false };
+  }
+
+  const requested = parseFloat(requestedAmount);
+  const max = parseFloat(delegationLimit.max);
+
+  if (isNaN(requested) || isNaN(max)) {
+    return { valid: false };
+  }
+
+  if (requested <= max) {
+    return { valid: true };
+  }
+
+  return {
+    valid: false,
+    exceedsBy: (requested - max).toFixed(2),
+  };
 }

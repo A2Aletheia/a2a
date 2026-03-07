@@ -119,7 +119,14 @@ export class TrustedAgent {
     });
 
     const start = Date.now();
-    let result: Task | { kind: "message"; taskId?: string; contextId?: string; metadata?: Record<string, unknown> };
+    let result:
+      | Task
+      | {
+          kind: "message";
+          taskId?: string;
+          contextId?: string;
+          metadata?: Record<string, unknown>;
+        };
     try {
       result = await this._a2aClient.sendMessage(params);
     } catch (err) {
@@ -147,7 +154,8 @@ export class TrustedAgent {
 
     this._persistContext();
 
-    const metadata = (result as { metadata?: Record<string, unknown> }).metadata;
+    const metadata = (result as { metadata?: Record<string, unknown> })
+      .metadata;
     const flowRequest = extractFlowRequest(metadata) ?? undefined;
 
     return {
@@ -286,7 +294,10 @@ export class TrustedAgent {
     taskId: string,
     configId: string,
   ): Promise<void> {
-    await this._a2aClient.deleteTaskPushNotificationConfig({ id: taskId, pushNotificationConfigId: configId });
+    await this._a2aClient.deleteTaskPushNotificationConfig({
+      id: taskId,
+      pushNotificationConfigId: configId,
+    });
   }
 
   async refreshCard(): Promise<AgentCard> {
