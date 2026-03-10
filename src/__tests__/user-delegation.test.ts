@@ -184,8 +184,11 @@ describe("user-delegation", () => {
       });
 
       expect(result).not.toBeNull();
-      expect(result!.delegation.userAddress).toBe(delegation.userAddress);
-      expect(result!.delegation.scope).toBe("hotel-booking");
+      if (!result) {
+        throw new Error("Expected delegation envelope to be extracted");
+      }
+      expect(result.delegation.userAddress).toBe(delegation.userAddress);
+      expect(result.delegation.scope).toBe("hotel-booking");
     });
 
     it("returns null for missing metadata", () => {

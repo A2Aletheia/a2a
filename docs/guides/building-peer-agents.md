@@ -302,12 +302,12 @@ peer.handle(async (context, response) => {
 
 ### connectByUrl()
 
-Connect without trust verification (for testing or trusted networks):
+Connect to a specific registered agent by URL when you already know its registry URL:
 
 ```typescript
 peer.handle(async (context, response) => {
   const agent = await peer.connectByUrl(
-    "https://internal-agent.local:3000",
+    "https://translator.example.com",
   );
   
   const result = await agent.send(context.textContent);

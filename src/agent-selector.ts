@@ -2,7 +2,7 @@ import type { Agent } from "@a2aletheia/sdk";
 import type { AgentSelector } from "./types.js";
 import { AgentNotFoundError } from "./errors.js";
 
-function ensureNonEmpty(agents: Agent[]): void {
+function ensureNonEmpty<T>(agents: T[]): asserts agents is [T, ...T[]] {
   if (agents.length === 0) {
     throw new AgentNotFoundError("No agents match the given criteria");
   }
@@ -28,13 +28,17 @@ export class HighestTrustSelector implements AgentSelector {
 export class RandomSelector implements AgentSelector {
   select(agents: Agent[]): Agent {
     ensureNonEmpty(agents);
-    return agents[Math.floor(Math.random() * agents.length)]!;
+    const selected = agents[Math.floor(Math.random() * agents.length)];
+    if (!selected) {
+      throw new AgentNotFoundError("No agents match the given criteria");
+    }
+    return selected;
   }
 }
 
 export class FirstMatchSelector implements AgentSelector {
   select(agents: Agent[]): Agent {
     ensureNonEmpty(agents);
-    return agents[0]!;
+    return agents[0];
   }
 }

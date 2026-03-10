@@ -49,8 +49,8 @@ vi.mock("@a2a-js/sdk/client", () => {
       default: {},
       createFrom: () => ({}),
     },
-    JsonRpcTransportFactory: class {},
-    RestTransportFactory: class {},
+    JsonRpcTransportFactory: vi.fn(function JsonRpcTransportFactory() {}),
+    RestTransportFactory: vi.fn(function RestTransportFactory() {}),
     createAuthenticatingFetchWithRetry: vi.fn(),
   };
 });

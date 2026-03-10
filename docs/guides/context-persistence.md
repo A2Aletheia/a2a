@@ -247,16 +247,18 @@ When you provide a scope:
 await client.connectByUrl(url, { scope: "user:123" });
 ```
 
-The store key becomes: `"user:123:https://agent.example.com"`
+After URL resolution, the store key is based on the resolved agent DID, not the original URL.
+
+The store key becomes: `"user:123:did:did:web:agent.example.com"`
 
 This creates isolated contexts:
 
 | Scope | Store Key |
 |-------|-----------|
-| `"user:alice"` | `"user:alice:https://agent.example.com"` |
-| `"user:bob"` | `"user:bob:https://agent.example.com"` |
-| `"session:abc"` | `"session:abc:https://agent.example.com"` |
-| (no scope) | `"url:https://agent.example.com"` |
+| `"user:alice"` | `"user:alice:did:did:web:agent.example.com"` |
+| `"user:bob"` | `"user:bob:did:did:web:agent.example.com"` |
+| `"session:abc"` | `"session:abc:did:did:web:agent.example.com"` |
+| (no scope) | `"did:did:web:agent.example.com"` |
 
 ## Creating a Custom Store
 
@@ -409,7 +411,7 @@ The internal `_persistContext()` method fires asynchronously (fire-and-forget) t
 
 ### When Context is Restored
 
-On `connectByUrl()` with a configured `contextStore`, the `restoreContext()` method loads any existing state:
+On `connectByUrl()` with a configured `contextStore`, the connection first resolves the registered agent by URL and then `restoreContext()` loads any existing state for that agent and scope:
 
 ```typescript
 const agent = await client.connectByUrl(url, { scope: "user:123" });
