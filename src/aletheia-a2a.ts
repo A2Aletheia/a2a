@@ -17,7 +17,6 @@ import type {
   TrustedResponse,
   TrustedStreamEvent,
 } from "./types.js";
-import { buildTrustInfo } from "./types.js";
 import { HighestTrustSelector } from "./agent-selector.js";
 import {
   buildPipelineConfig,
@@ -61,13 +60,10 @@ export class AletheiaA2A {
   private readonly _clientFactory: ClientFactory;
 
   /**
-   * Cache of connected agents keyed by DID.
+   * Cache of connected agents keyed by DID and optional scope.
    * Reusing a TrustedAgent preserves conversation context (contextId/taskId).
    */
   private readonly _connectionCache = new Map<string, TrustedAgent>();
-
-  /** Cache of URL-connected agents (no DID lookup). */
-  private readonly _urlConnectionCache = new Map<string, TrustedAgent>();
 
   constructor(private readonly config: AletheiaA2AConfig = {}) {
     this.logger = config.logger ?? new ConsoleLogger(config.logLevel ?? "info");
@@ -153,66 +149,25 @@ export class AletheiaA2A {
   // Connection-based API
   // ---------------------------------------------------------------------------
 
-  async connect(did: string): Promise<TrustedAgent> {
-    const cached = this._connectionCache.get(did);
-    if (cached) {
-      this.logger.debug("Reusing cached connection, refreshing trust", { did });
-      const freshAgent = await this.aletheiaClient.getAgent(did);
-      cached.agent = freshAgent;
-      cached.trustInfo = buildTrustInfo(freshAgent);
-      return cached;
-    }
-
+  async connect(
+    did: string,
+    options?: { scope?: string },
+  ): Promise<TrustedAgent> {
     this.logger.debug("Connecting to agent", { did });
     const agent = await this.aletheiaClient.getAgent(did);
-    return this._connectAgent(agent);
+    return this._connectAgent(agent, options);
   }
 
   async connectByUrl(
     url: string,
     options?: { scope?: string },
   ): Promise<TrustedAgent> {
-    const cacheKey = options?.scope ? `${url}#${options.scope}` : url;
-
-    const cached = this._urlConnectionCache.get(cacheKey);
-    if (cached) {
-      this.logger.debug("Reusing cached URL connection", {
-        url,
-        scope: options?.scope,
-      });
-      return cached;
-    }
-
-    this.logger.debug("Connecting to agent by URL", {
+    this.logger.debug("Resolving agent by registered URL", {
       url,
       scope: options?.scope,
     });
-    
-    const agentCardUrl = this._toAgentCardUrl(url);
-    const a2aClient = await this._createClientFromUrl(agentCardUrl);
-    const agentCard = await a2aClient.getAgentCard();
-    const trustInfo = buildTrustInfo(null);
-
-    const storeKey = options?.scope ? `${options.scope}:${url}` : `url:${url}`;
-
-    const trustedAgent = new TrustedAgent({
-      a2aClient,
-      agentCard,
-      agent: null,
-      trustInfo,
-      contextStore: this.config.contextStore,
-      storeKey,
-      signingIdentity: this.config.signingIdentity
-        ? this.config.signingIdentity
-        : undefined,
-    });
-
-    if (this.config.contextStore) {
-      await trustedAgent.restoreContext();
-    }
-
-    this._urlConnectionCache.set(cacheKey, trustedAgent);
-    return trustedAgent;
+    const agent = await this._findAgentByUrl(url);
+    return this._connectAgent(agent, options);
   }
 
   // ---------------------------------------------------------------------------
@@ -248,14 +203,17 @@ export class AletheiaA2A {
    */
   clearConnections(): void {
     this._connectionCache.clear();
-    this._urlConnectionCache.clear();
   }
 
   /**
    * Clear the cached connection for a specific DID.
    */
   disconnectAgent(did: string): void {
-    this._connectionCache.delete(did);
+    for (const key of this._connectionCache.keys()) {
+      if (key === did || key.startsWith(`${did}#`)) {
+        this._connectionCache.delete(key);
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -265,6 +223,47 @@ export class AletheiaA2A {
   private _toAgentCardUrl(baseUrl: string): string {
     const path = `/${AGENT_CARD_PATH.replace(/^\//, "")}`;
     return new URL(path, baseUrl.replace(/\/$/, "") + "/").toString();
+  }
+
+  private _normalizeAgentUrl(url: string): string {
+    return url.replace(/\/+$/, "");
+  }
+
+  private _getConnectionCacheKey(
+    did: string,
+    options?: { scope?: string },
+  ): string {
+    return options?.scope ? `${did}#${options.scope}` : did;
+  }
+
+  private _getStoreKey(
+    did: string,
+    options?: { scope?: string },
+  ): string {
+    return options?.scope ? `${options.scope}:did:${did}` : `did:${did}`;
+  }
+
+  private async _findAgentByUrl(url: string): Promise<Agent> {
+    const requestedUrl = this._normalizeAgentUrl(url);
+    const lookupUrls = [...new Set([url, requestedUrl])];
+
+    for (const lookupUrl of lookupUrls) {
+      const result = await this.aletheiaClient.discoverAgents({
+        url: lookupUrl,
+        isLive: this.pipelineConfig.requireLive ? true : undefined,
+        limit: 10,
+      } as Parameters<AletheiaClient["discoverAgents"]>[0]);
+      const matched = result.items.find(
+        (agent) => this._normalizeAgentUrl(agent.url) === requestedUrl,
+      );
+      if (matched) {
+        return matched;
+      }
+    }
+
+    throw new AgentNotFoundError(
+      `No registered agent found for URL "${url}"`,
+    );
   }
 
   private async _discoverAndSelect(capability: string): Promise<Agent> {
@@ -279,23 +278,25 @@ export class AletheiaA2A {
     return this.selector.select(agents);
   }
 
-  private async _connectAgent(agent: Agent): Promise<TrustedAgent> {
-    if (agent.did) {
-      const cached = this._connectionCache.get(agent.did);
-      if (cached) {
-        this.logger.debug("Reusing cached connection, refreshing trust", {
-          did: agent.did,
-        });
-        await verifySendPreconditions(
-          agent,
-          this.aletheiaClient,
-          this.pipelineConfig,
-          this.logger,
-        );
-        cached.agent = agent;
-        cached.trustInfo = buildTrustInfo(agent);
-        return cached;
-      }
+  private async _connectAgent(
+    agent: Agent,
+    options?: { scope?: string },
+  ): Promise<TrustedAgent> {
+    const cacheKey = this._getConnectionCacheKey(agent.did, options);
+    const cached = this._connectionCache.get(cacheKey);
+    if (cached) {
+      this.logger.debug("Reusing cached connection, refreshing trust", {
+        did: agent.did,
+        scope: options?.scope,
+      });
+      cached.trustInfo = await verifySendPreconditions(
+        agent,
+        this.aletheiaClient,
+        this.pipelineConfig,
+        this.logger,
+      );
+      cached.agent = agent;
+      return cached;
     }
 
     const trustInfo = await verifySendPreconditions(
@@ -312,15 +313,16 @@ export class AletheiaA2A {
     this.logger.info("Connected to agent", {
       did: agent.did,
       name: agent.name,
+      scope: options?.scope,
     });
 
-    const storeKey = agent.did ? `did:${agent.did}` : undefined;
+    const storeKey = this._getStoreKey(agent.did, options);
     const trustedAgent = new TrustedAgent({
       a2aClient,
       agentCard,
       agent,
       trustInfo,
-      contextStore: storeKey ? this.config.contextStore : undefined,
+      contextStore: this.config.contextStore,
       storeKey,
       aletheiaClient: this.aletheiaClient,
       signingIdentity: this.config.signOutboundMessages
@@ -328,13 +330,11 @@ export class AletheiaA2A {
         : undefined,
     });
 
-    if (this.config.contextStore && storeKey) {
+    if (this.config.contextStore) {
       await trustedAgent.restoreContext();
     }
 
-    if (agent.did) {
-      this._connectionCache.set(agent.did, trustedAgent);
-    }
+    this._connectionCache.set(cacheKey, trustedAgent);
 
     return trustedAgent;
   }

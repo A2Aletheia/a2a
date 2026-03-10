@@ -1,15 +1,8 @@
 # @a2aletheia/a2a
 
-[![npm version](https://img.shields.io/npm/v/@a2aletheia/a2a.svg)](https://www.npmjs.com/package/@a2aletheia/a2a)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://a2aletheia.github.io/a2a)
+Server-side client and peer-agent utilities for working with Aletheia-registered A2A agents.
 
-> **This is a 90% vibe-coded proof of concept. Open PR for smells.**
-
-Server-side package that wraps [`@a2a-js/sdk`](https://www.npmjs.com/package/@a2a-js/sdk) with Aletheia's trust and identity layer. Requestors import this instead of `@a2a-js/sdk` directly.
-
-> **Staging:** Defaults to the Aletheia staging network on Base Sepolia (`https://aletheia-api.vercel.app`, chain `84532`). Browse the registry at https://aletheia-psi.vercel.app.
+This package wraps `@a2a-js/sdk` with Aletheia registry lookup, trust checks, connection reuse, and optional context persistence.
 
 ## Installation
 
@@ -17,171 +10,150 @@ Server-side package that wraps [`@a2a-js/sdk`](https://www.npmjs.com/package/@a2
 pnpm add @a2aletheia/a2a
 ```
 
+## Exports
+
+The main entry point exports:
+
+- `AletheiaA2A` for outbound discovery, connection, send, and stream flows
+- `PeerAgent` for full-duplex agents that both host an A2A server and call other agents
+- `TrustedAgent` for connection reuse and task operations
+- built-in selectors: `HighestTrustSelector`, `RandomSelector`, `FirstMatchSelector`
+- `redisContextStore` for persisting `contextId` and `taskId`
+- sender identity, user delegation, and flow helper utilities
+
 ## Quick Start
 
-```typescript
+```ts
 import { AletheiaA2A } from "@a2aletheia/a2a";
 
-// Zero-config — connects to the Aletheia staging network by default
-const a2a = new AletheiaA2A();
+const client = new AletheiaA2A();
 
-// High-level: discover + verify + send in one call
-const response = await a2a.sendByCapability(
+const result = await client.sendByCapability(
   "translate-text",
-  "Translate hello to Spanish",
+  "Translate 'hello' to Spanish.",
 );
-console.log(response.response); // Task or Message
-console.log(response.trustInfo); // DID verified, liveness, trust score
 
-// Streaming
-const stream = a2a.streamByCapability(
-  "translate-text",
-  "Translate this document...",
-);
-for await (const event of stream) {
-  console.log(event.kind, event.event);
-}
+console.log(result.agentName);
+console.log(result.trustInfo);
+console.log(result.response);
 ```
 
-## Connection-based API
+## Connection API
 
-Get a handle to a verified agent and reuse it for multiple messages:
+```ts
+import { AletheiaA2A } from "@a2aletheia/a2a";
 
-```typescript
-// Connect by DID (full trust verification)
-const agent = await a2a.connect("did:web:translate.example.com");
-const response = await agent.send("Translate hello to Spanish");
+const client = new AletheiaA2A();
 
-// Connect by URL (skip registry, limited trust info)
-const agent = await a2a.connectByUrl("https://translate.example.com");
-const response = await agent.send("Translate hello to Spanish");
+const agent = await client.connect("did:key:z6MkExample");
+const response = await agent.send("Summarize this document.");
 
-// Streaming
-for await (const event of agent.stream("Translate this document...")) {
-  console.log(event.kind, event.event);
-}
-
-// Task management
-const task = await agent.getTask("task-id");
-const canceled = await agent.cancelTask("task-id");
+console.log(agent.contextId);
+console.log(response.trustInfo);
 ```
 
-## Configuration
+`connectByUrl()` is also available, but it resolves a registered agent by URL through the Aletheia registry before connecting. It does not open arbitrary URLs directly.
 
-```typescript
-interface AletheiaA2AConfig {
-  registryUrl?: string; // Aletheia registry API URL (defaults to staging)
-  agentSelector?: AgentSelector; // Default: HighestTrustSelector
-  minTrustScore?: number; // Default: 0
-  requireLive?: boolean; // Default: true
-  livenessCheckBeforeSend?: boolean; // Default: false (rely on registry cache)
-  verifyIdentity?: boolean; // Default: true
-  authToken?: string; // SIWE session token
-}
+```ts
+const agent = await client.connectByUrl("https://agent.example.com");
 ```
 
-## Agent Selectors
+## Trust Behavior
 
-Three built-in strategies for choosing among discovered agents:
+`AletheiaA2A` applies the package trust pipeline before establishing a reusable connection:
 
-```typescript
-import {
-  HighestTrustSelector, // Default — highest trustScore, tie-break by liveness
-  RandomSelector, // Random pick
-  FirstMatchSelector, // First result (registry ordering)
-} from "@a2aletheia/a2a";
+- optional identity verification
+- optional liveness requirement
+- minimum trust score filtering
 
-const a2a = new AletheiaA2A({
-  agentSelector: new RandomSelector(),
+The resulting `TrustInfo` is attached to `TrustedResponse` and streamed events.
+
+## Context Persistence
+
+`TrustedAgent` tracks the latest `contextId` and `taskId`. If you provide a `contextStore`, that state is restored across process restarts.
+
+```ts
+import Redis from "ioredis";
+import { AletheiaA2A, redisContextStore } from "@a2aletheia/a2a";
+
+const redis = new Redis(process.env.REDIS_URL!);
+
+const client = new AletheiaA2A({
+  contextStore: redisContextStore(redis, { ttlSeconds: 3600 }),
 });
 ```
 
-## Trust Pipeline
+## PeerAgent
 
-Every `connect()` and `sendByCapability()` call runs through the trust pipeline:
+`PeerAgent` combines the SDK agent host with the outbound `AletheiaA2A` client.
 
-1. **DID Resolution** — verifies the agent's DID resolves (skippable via `verifyIdentity: false`)
-2. **Liveness Check** — confirms the agent is reachable (fresh check via `livenessCheckBeforeSend: true`, or cached via `requireLive: true`)
-3. **Trust Score Gate** — rejects agents below `minTrustScore`
+```ts
+import { PeerAgent } from "@a2aletheia/a2a";
 
-Trust verification happens at **connection time**, not per-message. Stream events carry the `TrustInfo` snapshot from connection.
+const peer = new PeerAgent({
+  name: "Orchestrator",
+  version: "1.0.0",
+  url: "https://orchestrator.example.com",
+  description: "Routes tasks to specialist agents",
+  skills: [
+    {
+      id: "orchestrate",
+      name: "Orchestrate",
+      description: "Coordinate work across agents",
+      tags: [],
+    },
+  ],
+});
 
-## Error Handling
-
-```typescript
-import {
-  AletheiaA2AError, // Base class
-  AgentNotFoundError, // No agents match capability/criteria
-  DIDResolutionError, // DID resolution failed
-  AgentNotLiveError, // Agent not reachable
-  TrustScoreBelowThresholdError, // Trust score below threshold
-  A2AProtocolError, // JSON-RPC error from A2A protocol
-} from "@a2aletheia/a2a";
-
-try {
-  await a2a.sendByCapability("translate-text", "Hello");
-} catch (err) {
-  if (err instanceof AgentNotFoundError) {
-    // No agents with "translate-text" capability
-  }
-  if (err instanceof A2AProtocolError) {
-    console.error(err.rpcCode, err.message);
-  }
-}
+peer.handle(async (context, response) => {
+  const result = await peer.sendByCapability("translate-text", context.textContent);
+  response.text(`Handled by ${result.agentName}`);
+});
 ```
 
-## Re-exported Types
+## Selected Configuration
 
-All essential A2A protocol types are re-exported so consumers never need to depend on `@a2a-js/sdk`:
+Common `AletheiaA2A` options:
 
-```typescript
-import type {
-  AgentCard,
-  Message,
-  Task,
-  TaskState,
-  TaskStatus,
-  Part,
-  TextPart,
-  FilePart,
-  DataPart,
-  Artifact,
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
-  A2AClient,
-  A2AStreamEventData,
-} from "@a2aletheia/a2a";
-```
+- `registryUrl`
+- `agentSelector`
+- `minTrustScore`
+- `requireLive`
+- `livenessCheckBeforeSend`
+- `verifyIdentity`
+- `authToken`
+- `contextStore`
+- `preferredTransports`
+- `authenticationHandler`
+- `interceptors`
+- `polling`
+- `signOutboundMessages`
+- `signingIdentity`
 
-## Scope (v0.1.0)
+## Task and Connection Operations
 
-**Included:** Discovery, DID verification, liveness checks, trust score gating, send/stream messaging, connection handles, agent selection strategies.
+`TrustedAgent` exposes:
 
-**Not included:** Server-side agent hosting, retry/circuit-breaker, connection pooling, response caching, multi-agent fan-out, payment integration, response signature verification, push notifications.
+- `send()`
+- `stream()`
+- `getTask()`
+- `cancelTask()`
+- `resubscribeTask()`
+- push notification config helpers
+- `refreshCard()`
+- `refreshTrust()`
+- `resetContext()`
 
-## Documentation
+## Error Types
 
-📚 **[Full Documentation](https://a2aletheia.github.io/a2a)**
+The package exports structured errors including:
 
-### Guides
-
-- [Getting Started](https://a2aletheia.github.io/a2a/guides/getting-started) - Installation, setup, and first request
-- [Trust Pipeline](https://a2aletheia.github.io/a2a/guides/trust-pipeline) - Understanding DID verification, liveness checks, and trust scores
-- [Agent Selection Strategies](https://a2aletheia.github.io/a2a/guides/agent-selection) - Built-in and custom selectors
-- [Context Persistence](https://a2aletheia.github.io/a2a/guides/context-persistence) - Redis-backed conversation state for serverless
-- [Error Handling](https://a2aletheia.github.io/a2a/guides/error-handling) - Error types and recovery patterns
-- [Building Peer Agents](https://a2aletheia.github.io/a2a/guides/building-peer-agents) - Full-duplex agents with PeerAgent
-
-### API Reference
-
-- [AletheiaA2A](https://a2aletheia.github.io/a2a/api/aletheia-a2a) - Main client class
-- [TrustedAgent](https://a2aletheia.github.io/a2a/api/trusted-agent) - Connection handle
-- [PeerAgent](https://a2aletheia.github.io/a2a/api/peer-agent) - Full-duplex agent
-- [Agent Selectors](https://a2aletheia.github.io/a2a/api/agent-selectors) - Selection strategies
-- [Context Store](https://a2aletheia.github.io/a2a/api/context-store) - Persistence interface
-- [Errors](https://a2aletheia.github.io/a2a/api/errors) - Error classes
-- [Types](https://a2aletheia.github.io/a2a/api/types) - All TypeScript interfaces
+- `AgentNotFoundError`
+- `DIDResolutionError`
+- `AgentNotLiveError`
+- `TrustScoreBelowThresholdError`
+- `A2AProtocolError`
 
 ## License
 
-Licensed under [MIT License](LICENSE)
+Licensed under [MIT](LICENSE).
