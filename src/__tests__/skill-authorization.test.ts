@@ -120,7 +120,13 @@ describe("skill-authorization", () => {
       const extracted = extractFlowRequest(metadata);
 
       expect(extracted).not.toBeNull();
-      expect(extracted!.payload.amount).toEqual({ max: "100.00", currency: "USD" });
+      if (!extracted) {
+        throw new Error("Expected flow request to be extracted");
+      }
+      expect(extracted.payload.amount).toEqual({
+        max: "100.00",
+        currency: "USD",
+      });
     });
   });
 

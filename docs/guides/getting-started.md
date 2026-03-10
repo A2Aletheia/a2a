@@ -213,24 +213,22 @@ console.log("Task ID:", agent.lastTaskId);
 
 ### Connect by URL
 
-For agents not in the Aletheia registry, use `connectByUrl`:
+Use `connectByUrl` when you already know the registered URL of a specific agent:
 
 ```typescript
 import { AletheiaA2A } from "@a2aletheia/a2a";
 
 const client = new AletheiaA2A();
 
-// Connect directly to an agent by its A2A endpoint
+// Resolve a registered agent by URL
 const agent = await client.connectByUrl(
-  "https://agent.example.com/a2a",
+  "https://agent.example.com",
   { scope: "my-app-session-123" }  // Optional scope for context isolation
 );
 
-// Note: Trust info will have limited verification for URL-connected agents
-console.log("DID verified:", agent.trustInfo.didVerified); // false
+console.log("DID verified:", agent.trustInfo.didVerified);
 
-// Send messages as usual
-const result = await agent.send("Hello from a direct connection!");
+const result = await agent.send("Hello from a URL-resolved connection!");
 ```
 
 ### Connection Caching

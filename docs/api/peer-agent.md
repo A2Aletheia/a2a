@@ -263,7 +263,7 @@ const response = await translator.send("Hello, world!");
 
 ### connectByUrl()
 
-Connect to an agent by URL without trust verification. Use for testing or trusted internal networks.
+Resolve a registered agent by URL through the Aletheia registry, then connect with the same trust checks used by `connect()`.
 
 #### Signature
 
@@ -275,7 +275,7 @@ async connectByUrl(url: string): Promise<TrustedAgent>
 
 | Name | Type | Description |
 |------|------|-------------|
-| `url` | `string` | Base URL of the target agent |
+| `url` | `string` | Registered base URL of the target agent |
 
 #### Return Type
 
@@ -284,8 +284,8 @@ async connectByUrl(url: string): Promise<TrustedAgent>
 #### Example
 
 ```typescript
-const localAgent = await peer.connectByUrl("http://localhost:3000");
-const response = await localAgent.send("Test message");
+const agent = await peer.connectByUrl("https://agent.example.com");
+const response = await agent.send("Test message");
 ```
 
 ---

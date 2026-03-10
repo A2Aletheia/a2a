@@ -158,7 +158,7 @@ const response = await agent.send("Hello, agent!");
 
 ### connectByUrl()
 
-Connect directly to an agent by its A2A endpoint URL, bypassing the registry.
+Resolve a registered agent by URL through the Aletheia registry, then connect with the standard trust pipeline.
 
 ```typescript
 async connectByUrl(
@@ -171,7 +171,7 @@ async connectByUrl(
 
 | Name | Type | Description | Required |
 |------|------|-------------|----------|
-| `url` | `string` | The A2A endpoint URL of the agent. | Yes |
+| `url` | `string` | The registered base URL of the agent. | Yes |
 | `options.scope` | `string` | Scope identifier for context isolation. Use different scopes per user/session. | No |
 
 #### Returns
@@ -186,11 +186,11 @@ The `scope` option isolates connection contexts. Without scope, all callers shar
 
 ```typescript
 // Single-user context
-const agent = await client.connectByUrl("https://agent.example.com/a2a");
+const agent = await client.connectByUrl("https://agent.example.com");
 
 // Multi-user context (separate conversation per user)
 const userAgent = await client.connectByUrl(
-  "https://agent.example.com/a2a",
+  "https://agent.example.com",
   { scope: `user:${userId}` }
 );
 ```
